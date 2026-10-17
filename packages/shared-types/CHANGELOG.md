@@ -1,5 +1,5 @@
 # @criptofolio/shared-types
 
-## 1.1.9
+## 0.1.0
 
 Initial public release.

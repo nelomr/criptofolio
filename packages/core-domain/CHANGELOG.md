@@ -1,5 +1,5 @@
 # @criptofolio/core-domain
 
-## 1.1.9
+## 0.1.0
 
 Initial public release.

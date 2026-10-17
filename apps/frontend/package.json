@@ -1,7 +1,7 @@
 {
   "name": "@criptofolio/frontend",
   "private": true,
-  "version": "1.16.17",
+  "version": "0.1.0",
   "description": "Criptofolio - An open-source crypto portfolio tracker built with Vue 3.",
   "type": "module",
   "engines": {

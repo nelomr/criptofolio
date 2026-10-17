@@ -1,7 +1,7 @@
 {
   "name": "criptofolio-workspace",
   "private": true,
-  "version": "1.15.10",
+  "version": "0.1.0",
   "packageManager": "pnpm@11.8.0",
   "engines": {
     "node": ">=24.16.0",
