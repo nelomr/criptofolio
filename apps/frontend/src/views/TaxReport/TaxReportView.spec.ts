@@ -1,0 +1,164 @@
+import { describe, it, expect, vi } from 'vitest'
+import { ref } from 'vue'
+import { mount } from '@vue/test-utils'
+import TaxReportView from './TaxReportView.vue'
+import TaxReportHeader from './components/TaxReportHeader.vue'
+import TaxReportSummaryCards from './components/TaxReportSummaryCards.vue'
+import IntegrityCard from './components/IntegrityCard.vue'
+import PendingValuesReview from './components/PendingValuesReview.vue'
+import EditSpotTransactionDialog from './components/EditSpotTransactionDialog.vue'
+
+
+// Mock the composable
+vi.mock('./composables/useTaxReportPort', () => ({
+  useTaxReportPort: () => ({
+    isLoading: false,
+    // A real ref, as the composable returns: a bare `{ value: null }` is truthy in the
+    // template, so the currency statement rendered against an absent report.
+    report: ref(null),
+    metrics: { capitalGains: 100, yields: 200, totalLosses: 50, estimatedIrpf: 300 },
+    warnings: [],
+    availableYears: [2024],
+    selectedYear: 2024,
+    effectiveYear: 2024,
+    syncWeb3: vi.fn(),
+    uploadCsv: vi.fn(),
+    clearData: vi.fn()
+  })
+}))
+
+vi.mock('@/composables/useI18n', () => ({
+  useI18n: () => ({ t: (key: string) => key })
+}))
+
+vi.mock('./composables/useWalletsPort', () => ({
+  useWalletsPort: () => ({
+    walletNames: ['All Wallets'],
+    uploadWalletCsv: vi.fn(),
+    isUploading: false
+  })
+}))
+
+vi.mock('@/composables/queries/useTaxQueries', async () => {
+  const vue = await import('vue')
+  return {
+    useSpotTransactionsQuery: vi.fn(() => ({ data: vue.ref([]), isLoading: vue.ref(false) })),
+    useFuturesTransactionsQuery: vi.fn(() => ({ data: vue.ref([]), isLoading: vue.ref(false) })),
+    useFuturesDerivativesQuery: vi.fn(() => ({ data: vue.ref([]), isLoading: vue.ref(false) })),
+    useTaxReportQuery: vi.fn(() => ({ data: vue.ref(null), isLoading: vue.ref(false) })),
+    useAvailableYearsQuery: vi.fn(() => ({ data: vue.ref([2024]), isLoading: vue.ref(false) })),
+    useFiscalIntegrityQuery: vi.fn(() => ({
+      data: vue.ref({
+        groups: [],
+        totalDefects: 0,
+        pendingReview: 0,
+        needsRecalculation: false,
+      }),
+      isLoading: vue.ref(false),
+      refresh: vi.fn(),
+    })),
+  }
+})
+
+const setSpotOverrideMutate = vi.fn()
+
+vi.mock('@/composables/queries/useTaxMutations', async () => {
+  const vue = await import('vue')
+  const mutation = () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isLoading: vue.ref(false) })
+  return {
+    useSetSpotTransactionOverrideMutation: vi.fn(() => ({
+      mutate: setSpotOverrideMutate,
+      mutateAsync: vi.fn(),
+      isLoading: vue.ref(false),
+    })),
+    useRemoveSpotTransactionOverrideMutation: vi.fn(mutation),
+    useSetTransferDestinationMutation: vi.fn(mutation),
+  }
+})
+
+vi.mock('@/composables/queries/useSettingsQueries', async () => {
+  const vue = await import('vue')
+  return {
+    useSelectableAccountsQuery: vi.fn(() => ({
+      data: vue.ref([
+        { id: 'kraken', name: 'Kraken', type: 'exchange', parentAccountId: null },
+        { id: 'kraken:earn', name: 'Kraken / earn', type: 'exchange', parentAccountId: 'kraken' },
+      ]),
+      isLoading: vue.ref(false),
+    })),
+  }
+})
+
+vi.mock('@/composables/queries/usePortfolioQueries', async () => {
+  const vue = await import('vue')
+  return {
+    useRebuildMutation: vi.fn(() => ({
+      mutate: vi.fn(),
+      mutateAsync: vi.fn(),
+      isLoading: vue.ref(false),
+    })),
+  }
+})
+
+describe('TaxReportView.vue', () => {
+  it('renders all dumb components', () => {
+    const wrapper = mount(TaxReportView, {
+      global: {
+        stubs: {
+          TaxReportHeader: true,
+          TaxReportSummaryCards: true
+        }
+      }
+    })
+
+    expect(wrapper.findComponent(TaxReportHeader).exists()).toBe(true)
+    expect(wrapper.findComponent(TaxReportSummaryCards).exists()).toBe(true)
+    expect(wrapper.findComponent(IntegrityCard).exists()).toBe(true)
+    expect(wrapper.findComponent(PendingValuesReview).exists()).toBe(true)
+  })
+
+  it('feeds the destination picker from the selectable-accounts query', () => {
+    const wrapper = mount(TaxReportView, {
+      global: { stubs: { TaxReportHeader: true, TaxReportSummaryCards: true } },
+    })
+
+    expect(wrapper.findComponent(PendingValuesReview).props('accounts')).toEqual([
+      { id: 'kraken', name: 'Kraken' },
+      { id: 'kraken:earn', name: 'Kraken / earn' },
+    ])
+  })
+
+  it('renders Tabs navigation', () => {
+    const wrapper = mount(TaxReportView)
+    const content = wrapper.text()
+    expect(content).toContain('tax.tabs.ledgers')
+    expect(content).toContain('tax.tabs.report')
+    expect(content).toContain('tax.tabs.chat')
+  })
+
+  it("opening a row from the pending-review panel opens the shared edit dialog with price_fiat pre-focused, instead of declaring a price itself", async () => {
+    setSpotOverrideMutate.mockClear()
+    const wrapper = mount(TaxReportView, {
+      global: { stubs: { TaxReportHeader: true, TaxReportSummaryCards: true } },
+    })
+
+    wrapper.findComponent(PendingValuesReview).vm.$emit('editRow', 'hash-a')
+    await wrapper.vm.$nextTick()
+
+    // The panel no longer runs its own mutation — it only opens the same dialog the Ledgers
+    // pencil opens (design.md, "Revised after user feedback").
+    expect(setSpotOverrideMutate).not.toHaveBeenCalled()
+    const dialog = wrapper.findComponent(EditSpotTransactionDialog)
+    expect(dialog.props('open')).toBe(true)
+    expect(dialog.props('initialFocusField')).toBe('price_fiat')
+  })
+
+  it('opening a row from the Ledgers pencil does not pre-focus price_fiat', async () => {
+    const wrapper = mount(TaxReportView, {
+      global: { stubs: { TaxReportHeader: true, TaxReportSummaryCards: true } },
+    })
+
+    const dialog = wrapper.findComponent(EditSpotTransactionDialog)
+    expect(dialog.props('initialFocusField')).toBe(null)
+  })
+})

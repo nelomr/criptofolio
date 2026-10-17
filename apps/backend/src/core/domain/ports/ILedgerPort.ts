@@ -1,0 +1,375 @@
+/**
+ * ILedgerPort — Domain Port for the SQLite transactional ledger.
+ *
+ * DOMAIN ISOLATION RULE: No external library imports allowed here.
+ * PreciseAmount is a branded string defined in domain/value-objects.
+ * Infrastructure adapters convert TEXT ↔ PreciseAmount at the boundary.
+ * Money arithmetic belongs in the Application / Infrastructure layers.
+ */
+import type {
+  SpotTxType,
+  FuturesTxType,
+  CollateralMovementType,
+  TaxLotStatus,
+  DisposalType,
+  FifoQualityFlag,
+  FiscalClassificationFlag,
+  ManualValueProvenance,
+} from '@criptofolio/shared-types';
+import type { PreciseAmount } from '../value-objects/PreciseAmount.js';
+
+// ---------------------------------------------------------------------------
+// Domain Entity Interfaces (what the Domain sees — never raw SQLite strings)
+// ---------------------------------------------------------------------------
+
+export interface LedgerSpotTransaction {
+  id: string;
+  id_hash: string;
+  account_id: string;
+  exchange?: string;
+  tx_type: SpotTxType;
+  asset_in_id?: string;
+  amount_in?: PreciseAmount;
+  asset_out_id?: string;
+  amount_out?: PreciseAmount;
+  fee_asset_id?: string;
+  fee_amount?: PreciseAmount;
+  /**
+   * `null` when neither a total nor a price could be resolved at ingestion — genuinely unknown.
+   * A source-stated `0` (a promotional credit, a free acquisition) is a fact and stays `0`; only
+   * its absence becomes `null`. Same distinction as `fee_amount`, one layer down.
+   */
+  total_fiat: PreciseAmount | null;
+  price_fiat: PreciseAmount | null;
+  /** ISO-4217 currency code (e.g. 'EUR', 'USD'). Mandatory — never undefined. */
+  fiat_currency: string;
+  /**
+   * Fiscal classification of the operation, when the canonical `tx_type` cannot express it. The
+   * derived events inherit it, which is how the AEAT audit trail survives materialisation.
+   */
+  flag?: FiscalClassificationFlag | null;
+  /**
+   * Links this leg to the other leg of the same physical custody movement, once ingestion has
+   * validated the source's own reference as one — see `withTransferGroupId` in `rowAggregator`.
+   * Read by DuckDB's `v_custody_movements` to attribute a transfer to its real counterparty instead
+   * of the synthetic `ownwallet-<ASSET>`.
+   */
+  transfer_group_id?: string | null;
+  timestamp: string; // ISO-8601
+  status: string;
+}
+
+export interface LedgerFuturesTransaction {
+  id: string;
+  id_hash: string;
+  account_id: string;
+  exchange?: string;
+  tx_type: FuturesTxType;
+  symbol: string;
+  amount?: PreciseAmount;
+  trade_price?: PreciseAmount;
+  realized_pnl?: PreciseAmount;
+  settlement_asset_id?: string;
+  funding_amount?: PreciseAmount;
+  fee_asset_id?: string;
+  fee_amount?: PreciseAmount;
+  /** ISO-4217 currency code (e.g. 'EUR', 'USD'). Mandatory — never undefined. */
+  fiat_currency: string;
+  timestamp: string; // ISO-8601
+  status: string;
+}
+
+/**
+ * A currency movement that funds or converts futures collateral — never a position event.
+ *
+ * `amount` is signed, unlike every other fiat magnitude on the ledger: the two legs of a conversion
+ * pair must sum to zero across currencies while remaining separable per currency, which only the
+ * signed value can express. `pair_id` links two legs once ingestion has confirmed they share an
+ * instant and oppose in sign; it stays `null` for a movement recorded one-sided — the absence of a
+ * counterpart is recorded, never inferred across files.
+ */
+export interface LedgerCollateralMovement {
+  id: string;
+  id_hash: string;
+  account_id: string;
+  movement_type: CollateralMovementType;
+  /** The currency this leg is denominated in ('EUR', 'USD', ...) — never a contract symbol. */
+  currency: string;
+  amount: PreciseAmount;
+  spread_pct?: PreciseAmount | null;
+  pair_id?: string | null;
+  timestamp: string; // ISO-8601
+  status: string;
+}
+
+/**
+ * The exchange rate a converted figure used, and the date it was published for.
+ *
+ * One value rather than two optional fields: a rate without its date cannot be audited and a date
+ * without its rate states nothing, so neither half is separately representable. Absent entirely when
+ * no conversion took place — never a 0 rate, which would read as a rate that was actually applied.
+ */
+export interface FxConversion {
+  readonly rate: PreciseAmount;
+  /** ISO-8601 date, `YYYY-MM-DD` — the FX ledger row's own date, not the transaction's. */
+  readonly rateDate: string;
+}
+
+export interface LedgerTaxLot {
+  id: string;
+  spot_transaction_id: string;
+  asset_id: string;
+  account_id: string;
+  original_qty: PreciseAmount;
+  remaining_qty: PreciseAmount;
+  unit_cost_fiat: PreciseAmount;
+  total_cost_fiat: PreciseAmount;
+  fiat_currency: string;
+  acquisition_timestamp: string; // ISO-8601
+  exchange_location: string;
+  source_tx_id?: string;
+  status: TaxLotStatus;
+  /** Data-quality defect on this lot's basis, if any. Suppresses gains; never blocks. */
+  quality_flag?: FifoQualityFlag | null;
+  /** Whether the cost basis was observed from market data, declared by the user, or converted. */
+  value_provenance?: ManualValueProvenance;
+  /** Present only when `value_provenance` is `MARKET_CONVERTED`. */
+  fx_conversion?: FxConversion | null;
+}
+
+export interface LedgerTaxLotEvent {
+  id: string;
+  tax_lot_id: string;
+  spot_transaction_id: string;
+  account_id: string;
+  disposal_date: string; // ISO-8601
+  amount_from_lot: PreciseAmount;
+  /**
+   * Fiat proceeds per unit, or `null` when no price could be resolved.
+   *
+   * Nullability is load-bearing: without it the SQL has no way to express "unknown" and resorts to
+   * inventing a plausible number.
+   */
+  sale_price_fiat: PreciseAmount | null;
+  /** `null` whenever `sale_price_fiat` is null — no gain is derivable from an unknown price. */
+  gain_loss_fiat: PreciseAmount | null;
+  fiat_currency: string;
+  is_taxable: boolean;
+  /** Why the lot was consumed. Never assumed — a network fee is not a sale. */
+  disposal_type: DisposalType;
+  /**
+   * Fiscal classification. `WALLET_ACTIVATION` drives the AEAT audit trail. Distinct from
+   * `quality_flag` because the two co-occur.
+   */
+  flag?: FiscalClassificationFlag | null;
+  /** Data-quality defect on this event's valuation, if any. */
+  quality_flag?: FifoQualityFlag | null;
+  /** Whether the monetary value was observed from market data, declared by the user, or converted. */
+  value_provenance?: ManualValueProvenance;
+  /** Present only when `value_provenance` is `MARKET_CONVERTED`. */
+  fx_conversion?: FxConversion | null;
+  notes?: string;
+}
+
+/**
+ * One leg of a double-entry custody movement: a signed quantity delta of one lot against one account
+ * at a point in time.
+ *
+ * `qty_delta` is signed, unlike every fiat magnitude in this port. The entries for one movement sum
+ * to zero for a given asset, which is what makes custody a balance rather than a pairing heuristic —
+ * no time window, no amount tolerance, order-independent.
+ */
+export interface LedgerCustodyEntry {
+  id: string;
+  tax_lot_id: string;
+  asset_id: string;
+  account_id: string;
+  /** Negative for an outflow, positive for an inflow. */
+  qty_delta: PreciseAmount;
+  occurred_at: string; // ISO-8601
+  spot_transaction_id: string;
+}
+
+/**
+ * A user-declared counterparty for a custody movement, replacing the synthetic
+ * `ownwallet-<ASSET>` account with a real one. Also a calculation INPUT.
+ */
+export interface LedgerTransferDestinationOverride {
+  id_hash: string;
+  counterparty_account_id: string;
+  note?: string;
+}
+
+/**
+ * A durable, auditable, revertible edit to a spot transaction's P&L-relevant fields, keyed on the
+ * imported row's deterministic `id_hash` (design.md D1 — never recomputed from edited values).
+ * A calculation INPUT, exempt from reconciliation, mirroring `spot_transaction_overrides` (migration
+ * 008) column-for-column: each editable field is a `*Edited` flag plus its value, except fee, which
+ * is the three-way `feeKind` discriminant (rule 5).
+ *
+ * `setSpotTransactionOverride` is PUT semantics, not a merge (design.md D8): a field absent from
+ * the write (its flag `false`) reverts that field to unedited, exactly like the UPDATE that folds
+ * `*_edited = 0` in the SQL table.
+ */
+export interface LedgerSpotTransactionOverride {
+  id_hash: string;
+  amount_in_edited: boolean;
+  amount_in: PreciseAmount | null;
+  amount_out_edited: boolean;
+  amount_out: PreciseAmount | null;
+  price_edited: boolean;
+  price_fiat: PreciseAmount | null;
+  /** Required exactly when `price_edited` is true — a declared price without a currency is inert. */
+  fiat_currency: string | null;
+  total_fiat_edited: boolean;
+  /** Nullable even when edited: "edited to NULL" and "not edited" are distinguished by the flag. */
+  total_fiat: PreciseAmount | null;
+  fee_kind: 'UNCHANGED' | 'NONE' | 'CHARGED';
+  fee_amount: PreciseAmount | null;
+  fee_asset_id: string | null;
+  timestamp_edited: boolean;
+  timestamp: string | null;
+  tx_type_edited: boolean;
+  tx_type: SpotTxType | null;
+  note?: string;
+}
+
+/**
+ * Outcome of reconciling one derived table against a recomputed set.
+ *
+ * `retired` is the arm an upsert cannot express. Without it materialisation is monotonic — able only
+ * to grow — so rows whose source disappeared survive indefinitely.
+ */
+export interface ReconciliationSummary {
+  inserted: number;
+  updated: number;
+  retired: number;
+  reactivated: number;
+}
+
+/**
+ * `wallet` carries the source's sub-wallet designation (Kraken's `spot / main`, `earn`, …) so a child
+ * account can be resolved; absent it, the venue account is used and no child is fabricated.
+ */
+export interface EnsureAccountInput {
+  accountId: string;
+  name?: string;
+  type?: string;
+  /** Sub-wallet designation from the source export, if any. */
+  wallet?: string | null;
+  /** Venue parent for a sub-wallet account. */
+  parentAccountId?: string | null;
+  /** True for system-created custody counterparties (`ownwallet-<ASSET>`). */
+  isSynthetic?: boolean;
+}
+
+/** Input for resolving an asset, including whether it is a unit of account rather than a holding. */
+export interface EnsureAssetInput {
+  assetId: string;
+  symbol?: string;
+  /** Fiat assets are excluded from FIFO lot tracking entirely. */
+  isFiat?: boolean;
+}
+
+/** What `initialize` changed, so the caller can react to a schema that moved under it. */
+export interface LedgerInitializationSummary {
+  /**
+   * Migrations applied by this call, empty when the schema was already current.
+   *
+   * Reported rather than acted upon: a migration invalidates the derived tables, but the flag that
+   * records that fact lives in the settings database, which this port cannot reach.
+   */
+  readonly appliedMigrations: readonly string[];
+}
+
+// ---------------------------------------------------------------------------
+// Port Interface
+// ---------------------------------------------------------------------------
+
+export interface ILedgerPort {
+  /** Runs DDL migrations to ensure all tables exist. Call once at server startup. */
+  initialize(): Promise<LedgerInitializationSummary>;
+
+  /**
+   * Runs `work` as one unit: either every write inside it lands or none does.
+   *
+   * Declared on the port because atomicity is a requirement the caller must be able to state, and
+   * the three reconciliation methods below are individually insufficient — a half-reconciled ledger
+   * presents events referencing lots that no longer exist. The caller never sees a transaction
+   * handle, so no SQL vocabulary leaks out of the adapter.
+   */
+  runInTransaction<T>(work: () => Promise<T>): Promise<T>;
+
+  // Spot Transactions
+  getSpotTransactions(accountId?: string): Promise<LedgerSpotTransaction[]>;
+  saveSpotTransaction(tx: LedgerSpotTransaction): Promise<void>;
+
+  // Futures Transactions
+  getFuturesTransactions(accountId?: string): Promise<LedgerFuturesTransaction[]>;
+  saveFuturesTransaction(tx: LedgerFuturesTransaction): Promise<void>;
+
+  // Futures Collateral Movements — never futures_transactions; see LedgerCollateralMovement.
+  getCollateralMovements(accountId?: string): Promise<LedgerCollateralMovement[]>;
+  saveCollateralMovement(movement: LedgerCollateralMovement): Promise<void>;
+
+  // Tax Lots
+  getTaxLots(accountId: string): Promise<LedgerTaxLot[]>;
+  createTaxLot(lot: LedgerTaxLot): Promise<void>;
+
+  // Lot History Events (S-3: previously missing)
+  getLotHistoryEvents(accountId: string): Promise<LedgerTaxLotEvent[]>;
+  saveLotHistoryEvent(event: LedgerTaxLotEvent): Promise<void>;
+
+  // ---------------------------------------------------------------------------
+  // Reconciliation of derived tables
+  //
+  // Each method takes the COMPLETE recomputed set and brings the table into agreement with it:
+  // insert, update, soft-delete the absent, reactivate the returning. An upsert cannot retire an
+  // absent row, which is why these replace one.
+  //
+  // Scope is strictly derived data. The override tables below are calculation inputs and are never
+  // touched here.
+  // ---------------------------------------------------------------------------
+
+  reconcileTaxLots(lots: LedgerTaxLot[]): Promise<ReconciliationSummary>;
+  reconcileLotHistoryEvents(events: LedgerTaxLotEvent[]): Promise<ReconciliationSummary>;
+  reconcileCustodyEntries(entries: LedgerCustodyEntry[]): Promise<ReconciliationSummary>;
+
+  getCustodyEntries(accountId?: string): Promise<LedgerCustodyEntry[]>;
+
+  // ---------------------------------------------------------------------------
+  // User-authored overrides — calculation inputs, exempt from reconciliation
+  // ---------------------------------------------------------------------------
+
+  getSpotTransactionOverride(idHash: string): Promise<LedgerSpotTransactionOverride | undefined>;
+  /** Every active override, for the Ledgers-table read model (design.md D8's `override` field). */
+  getSpotTransactionOverrides(): Promise<LedgerSpotTransactionOverride[]>;
+  setSpotTransactionOverride(input: LedgerSpotTransactionOverride): Promise<void>;
+  /** `count` is 0 when no active override existed for `idHash` — a no-op, not an error. */
+  removeSpotTransactionOverride(idHash: string): Promise<{ count: number }>;
+
+  getTransferDestinationOverrides(): Promise<LedgerTransferDestinationOverride[]>;
+  setTransferDestinationOverride(override: LedgerTransferDestinationOverride): Promise<void>;
+  removeTransferDestinationOverride(idHash: string): Promise<void>;
+
+  // FK pre-resolution
+  getAccounts(): Promise<
+    {
+      id: string;
+      name: string;
+      type: string;
+      parentAccountId?: string | null;
+      isSynthetic: boolean;
+    }[]
+  >;
+  ensureAssetExists(input: EnsureAssetInput): Promise<void>;
+  /** Returns the resolved account id, which may be a child account derived from `wallet`. */
+  ensureAccountExists(input: EnsureAccountInput): Promise<string>;
+
+  /**
+   * Returns all unique (assetId, symbol) pairs that are currently tracked
+   * in the ledger (i.e. appear in the assets table).
+   * Used by IngestDailyPricesUseCase to discover which assets need price ingestion.
+   */
+  getTrackedAssets(): Promise<{ assetId: string; symbol: string }[]>;
+}

@@ -1,0 +1,12 @@
+# Leak scan first so it fails fast. A missing binary fails the hook instead of skipping it: a guardrail
+# that disappears when its binary is absent is a bypass.
+command -v gitleaks >/dev/null 2>&1 || {
+  echo "gitleaks 8.30.1 is required for the pre-commit leak scan. Install it (macOS: brew install gitleaks; see https://github.com/gitleaks/gitleaks#installing) and retry." >&2
+  exit 1
+}
+gitleaks git --pre-commit --staged --redact --no-banner --config .gitleaks.toml
+
+# Tests run one package at a time: each opens its own in-memory DuckDB with its own worker pool,
+# and running them concurrently starves every query enough to blow the per-test timeouts.
+pnpm exec turbo run typecheck lint
+pnpm run test:packages

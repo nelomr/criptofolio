@@ -1,0 +1,838 @@
+import type { I18nDictionary } from "@/core/domain/models/I18nDictionary";
+
+export const es: I18nDictionary = {
+  "dashboard.title": "Criptofolio",
+  "dashboard.greeting": "Hola {name}",
+  "navbar.portfolio": "Portafolio",
+  "navbar.settings": "Ajustes",
+  "navbar.logout": "Cerrar sesión",
+
+  // Common
+  "common.not_available": "N/D",
+  "common.edit_disabled":
+    "La edición de la transacción {id} está deshabilitada actualmente.",
+  "common.delete_disabled":
+    "La eliminación de la transacción {id} está deshabilitada actualmente.",
+
+  // Settings
+  "settings.title": "Ajustes",
+  "settings.description":
+    "Gestiona tus preferencias locales, claves de API y opciones de seguridad.",
+  "settings.language.title": "Idioma de la Interfaz",
+  "settings.language.description":
+    "Selecciona el idioma en el que se mostrará la aplicación.",
+  "settings.language.select_placeholder": "Selecciona un idioma",
+  "settings.language.option_es": "Español",
+  "settings.language.option_en": "Inglés",
+  "settings.language.save_btn": "Guardar",
+  "settings.language.saving_btn": "Guardando...",
+  "settings.language.success": "Idioma actualizado correctamente",
+  "settings.language.error": "Error al guardar el idioma",
+
+  // Settings — Moneda Base
+  "settings.currency.title": "Moneda Base",
+  "settings.currency.description": "Selecciona la moneda fiat con la que se mostrarán todos los valores del portfolio.",
+  "settings.currency.select_placeholder": "Selecciona una moneda",
+  "settings.currency.option_usd": "USD — Dólar estadounidense",
+  "settings.currency.option_eur": "EUR — Euro",
+  "settings.currency.option_gbp": "GBP — Libra esterlina",
+  "settings.currency.save_btn": "Guardar",
+  "settings.currency.saving_btn": "Guardando...",
+  "settings.currency.success": "Moneda base actualizada correctamente",
+  "settings.currency.error": "Error al guardar la moneda base",
+  "settings.currency.sync_success": "Tipos de cambio sincronizados correctamente",
+  "settings.currency.sync_error": "Error al sincronizar los tipos de cambio",
+  "settings.currency.sync_tooltip": "Los nuevos datos salen a las 16:30",
+
+  // Errors
+  "errors.validation.title": "Error de Validación de Datos",
+  "errors.validation.parser_skipped_rows":
+    "El parser de {parser} omitió {skipped} filas inválidas o no soportadas.",
+  "errors.validation.malformed_record":
+    "Un registro de transacción fue omitido debido a datos malformados.",
+  "errors.validation.malformed_derivative":
+    "Un registro de derivados fue omitido debido a datos malformados.",
+  "errors.validation.api_malformed_data":
+    "La API del Portfolio devolvió datos malformados.",
+  "errors.validation.csv_required":
+    "La subida de CSV requiere seleccionar un archivo.",
+  "errors.market.invalid_price_event":
+    "Evento de precio inválido recibido del flujo de mercado.",
+  "errors.market.invalid_global_metrics":
+    "Métricas globales inválidas recibidas del flujo de mercado.",
+  "errors.market.stream_down":
+    "Se ha perdido la conexión de precios en directo — reconectando automáticamente.",
+  "errors.market.stream_recovered": "Conexión de precios en directo recuperada.",
+  "errors.advisor.invalid_stream_frame":
+    "El asesor envió un fragmento de respuesta malformado y se detuvo la respuesta.",
+  "errors.advisor.execution_profiles_rejected":
+    "El asesor rechazó esos límites de ejecución.",
+  "errors.advisor.stream_network":
+    "No se pudo contactar con el asesor. Comprueba tu conexión e inténtalo de nuevo.",
+  "errors.advisor.stream_http":
+    "El servicio del asesor devolvió un error y se detuvo la respuesta.",
+  "errors.advisor.stream_no_body":
+    "El servicio del asesor respondió sin un flujo de respuesta.",
+  "errors.advisor.model_chain_rejected":
+    "No se pudo guardar la cadena de modelos del asesor.",
+
+  // Portfolio Header
+  "portfolio.roi": "ROI Total",
+  "portfolio.invested": "Capital Invertido",
+  "portfolio.analytics": "Analítica",
+  "portfolio.holdings": "Holdings",
+  "portfolio.metrics": "Métricas",
+  "portfolio.metrics_tabs.performance_history": "Historial de Rendimiento",
+  "portfolio.metrics_tabs.performance.kicker": "Historial de Rentabilidad",
+  "portfolio.metrics_tabs.performance.title": "Portfolio Performance",
+  "portfolio.metrics_tabs.performance.desc":
+    "Valor liquidado de cartera. Coste base: {cost}.",
+  "portfolio.metrics_tabs.performance.desc_no_cost": "Valor liquidado de cartera.",
+  "portfolio.metrics_tabs.performance.stats.return": "Retorno {range}",
+  "portfolio.metrics_tabs.performance.stats.return_desc":
+    "Beneficio o pérdida absoluta (en Fiat) generada en el período seleccionado.",
+  "portfolio.metrics_tabs.performance.stats.vs_cost": "% s/coste",
+  "portfolio.metrics_tabs.performance.stats.vs_cost_desc":
+    "Rendimiento porcentual frente a la inversión inicial o coste base.",
+  "portfolio.metrics_tabs.performance.stats.volatility": "Volatilidad",
+  "portfolio.metrics_tabs.performance.stats.volatility_desc":
+    "Dispersión de los retornos (desviación estándar). A mayor %, mayor riesgo o fluctuación.",
+  "portfolio.metrics_tabs.performance.stats.best_day": "Mejor día",
+  "portfolio.metrics_tabs.performance.stats.best_day_desc":
+    "El porcentaje de ganancia más alto registrado en un solo día.",
+  "portfolio.metrics_tabs.performance.tooltip.equity": "Capital:",
+  "portfolio.metrics_tabs.performance.tooltip.cost": "Coste:",
+
+  // Risk Metrics
+  "portfolio.metrics_tabs.risk.kicker": "Ratio de Sharpe · Rolling 30D",
+  "portfolio.metrics_tabs.risk.title": "Sharpe Ratio",
+  "portfolio.metrics_tabs.risk.desc":
+    "Rentabilidad ajustada al riesgo. Sobre 1 = rentabilidad compensa volatilidad. Banda verde = zona excelente.",
+  "portfolio.metrics_tabs.risk.current": "Sharpe actual",
+  "portfolio.metrics_tabs.risk.stats.sharpe": "Sharpe YTD",
+  "portfolio.metrics_tabs.risk.stats.sharpe_desc":
+    "Ratio de Sharpe calculado sobre el año en curso (Year To Date).",
+  "portfolio.metrics_tabs.risk.stats.sortino": "Sortino",
+  "portfolio.metrics_tabs.risk.stats.sortino_desc":
+    "Similar al Sharpe, pero solo penaliza la volatilidad negativa (caídas).",
+  "portfolio.metrics_tabs.risk.stats.calmar": "Calmar",
+  "portfolio.metrics_tabs.risk.stats.calmar_desc":
+    "Rentabilidad anualizada dividida por el máximo drawdown.",
+  "portfolio.metrics_tabs.risk.zones.excellent": "EXCELENTE",
+  "portfolio.metrics_tabs.risk.zones.acceptable": "ACEPTABLE",
+  "portfolio.metrics_tabs.risk.zones.loss": "PÉRDIDA",
+
+  "portfolio.syncing": "(Sincronizando...)",
+  "portfolio.load_failed": "No se pudo cargar la cartera. Revisa el backend y reintenta.",
+  "portfolio.conversion.notice": "Importes convertidos para mostrarse en",
+  "portfolio.conversion.rate_basis": "tasas con fecha",
+  "portfolio.conversion.incomplete": "posiciones no se pudieron convertir y se muestran en su propia divisa",
+  "portfolio.conversion.unconverted": "sin convertir",
+  "portfolio.no_assets": "No se han encontrado activos en la cartera.",
+  "portfolio.subtitle": "Analisis portfolio",
+  "portfolio.sync_btn": "Sincronizar Portfolio",
+
+  // Metrics
+  "metrics.net_equity": "Patrimonio Neto Total",
+  "metrics.unrealized_pnl": "PyG No Realizado",
+  "metrics.realized_pnl": "PyG Realizado (Imponible)",
+
+  // KPI Metrics Dashboard
+  "metrics.error_loading": "Error al cargar KPIs:",
+  "metrics.drawdown.kicker": "Riesgo de Caída Máxima",
+  "metrics.drawdown.title": "Curva de Drawdown Histórico",
+  "metrics.drawdown.desc": "Porcentaje de caída histórica de la cartera desde su punto máximo (ATH). El área roja muestra la caída.",
+  "metrics.drawdown.tooltip_label": "Drawdown:",
+  "metrics.roi_total_label": "ROI Total",
+  "metrics.roi_delta_desc": "en 24h",
+  "metrics.invested_label": "Invertido",
+  "metrics.max_drawdown_label": "Max Drawdown",
+  "metrics.drawdown_delta_desc": "desde ATH",
+  "metrics.recovered_label": "Recuperado",
+  "metrics.win_rate_label": "Tasa de Acierto",
+  "metrics.trades_won": "Ganadas",
+  "metrics.trades_lost": "Perdidas",
+  "metrics.trades_total": "Totales",
+  "metrics.average_r_label": "R Promedio",
+  "metrics.best_worst_label": "Mejor / Peor",
+  "metrics.dispersion_label": "Dispersión",
+  "metrics.portfolio": "del Portfolio",
+  "metrics.asset_allocation": "Dstribución de Assets",
+  "metrics.distribution": "Distribución",
+  "metrics.assets_kicker_upper": "ACTIVOS",
+  "metrics.assets_kicker": "Activos",
+  "metrics.assets_kicker_desc":
+    "Número total de criptoactivos distintos que conforman tu cartera actual.",
+  "metrics.hhi_kicker": "HHI",
+  "metrics.hhi_kicker_desc":
+    "Herfindahl-Hirschman Index. Mide la concentración. >2500 indica alta concentración en pocos activos.",
+  "metrics.volatility.kicker": "Heatmap de Volatilidad",
+  "metrics.volatility.title": "Retornos diarios · 15 semanas",
+  "metrics.volatility.desc":
+    "Cada celda es un día. Verde = retorno positivo, rojo = pérdida, intensidad = magnitud.",
+  "metrics.volatility.tooltip.date": "Fecha",
+  "metrics.volatility.tooltip.return": "Retorno",
+  "metrics.volatility.stats.daily_avg": "Media Diaria",
+  "metrics.volatility.stats.best_day": "Mejor día",
+  "metrics.volatility.stats.best_day_desc":
+    "La ganancia porcentual más alta en un solo día dentro del mapa de calor.",
+  "metrics.volatility.stats.worst_day": "Peor día",
+  "metrics.volatility.stats.worst_day_desc":
+    "La mayor caída porcentual registrada en un solo día.",
+  "metrics.volatility.stats.bullish_days": "Días Alcistas",
+  "metrics.volatility.stats.bullish_days_desc":
+    "Proporción de días que cerraron en positivo frente al total de días mostrados.",
+
+  // Token Summary Cards
+  "token.balance": "Balance",
+  "token.current_value": "Valor Actual",
+  "token.base_cost": "Coste Base",
+  "token.unrealized_pnl": "PnL Latente",
+
+  // Token Active Lots
+  "token.active_lots.title": "Lotes FIFO Activos (Unidades sin vender)",
+  "token.active_lots.date": "Fecha de Adquisición",
+  "token.active_lots.remaining_qty": "Cantidad Restante",
+  "token.active_lots.buy_price": "Precio de Compra",
+  "token.active_lots.remaining_cost": "Coste Restante",
+  "token.active_lots.status": "Estado",
+  "token.active_lots.in_portfolio": "En Cartera",
+
+  // Token Sales History
+  "token.sales_history.date": "Fecha",
+  "token.sales_history.sold_qty": "Cant. Vendida",
+  "token.sales_history.sell_price": "Precio de Venta",
+  "token.sales_history.type": "Tipo",
+  "token.sales_history.sold": "Vendido",
+  "token.sales_history.title": "Historial de Ventas y P&L Realizado",
+
+  // Expanded Lots Table properties merged below
+
+  // Lot Event History
+  "lot_events.date": "Fecha Evento",
+  "lot_events.concept": "Concepto",
+  "lot_events.sell_price": "Precio Venta",
+  "lot_events.notes": "Notas",
+  "lot_events.non_taxable": "Evento No Imponible",
+  "lot_events.badge_activation": "Activación",
+  "lot_events.badge_exempt": "Exento",
+  "lot_events.badge_gain": "BENEFICIO",
+  "lot_events.badge_loss": "PÉRDIDA",
+  "lot_events.affected_amount": "Cant. Afectada",
+  "lot_events.pnl": "PyG (€)",
+  "lot_events.non_taxable_desc":
+    "Este movimiento no genera plusvalía/minusvalía fiscal (LIRPF Art. 33.1).",
+
+  // Tables & Columns
+  "table.asset_type_crypto": "Cryptocurrency",
+  "table.asset_type_fiat": "Dinero Fiat",
+  "table.asset": "Activo",
+  "table.balance": "Balance",
+  "table.cost_basis": "Base de Coste",
+  "table.avg_cost": "Coste Medio",
+  "table.market_value": "Valor de Mercado",
+  "table.performance": "Rendimiento",
+  "table.locations": "Ubicaciones",
+
+  // Expanded Lots Table
+  "expanded_lots.title": "Lotes Fiscales FIFO (Abiertos)",
+  "expanded_lots.date": "Fecha",
+  "expanded_lots.type_status": "Tipo / Estado",
+  "expanded_lots.orig_amount": "Cant. Orig",
+  "expanded_lots.rest_amount": "Cant. Rest",
+  "expanded_lots.location": "Ubicación",
+  "expanded_lots.unit_cost": "Coste Unit.",
+  "expanded_lots.total_cost": "Coste Total",
+  "expanded_lots.buy": "COMPRA",
+  "expanded_lots.sold": "VENDIDO",
+  "expanded_lots.ai_insight": "AI Insight",
+  "expanded_lots.tax_loss": "Tax-Loss Harvesting",
+  "expanded_lots.tax_loss_desc": " antes del cierre fiscal.",
+  "expanded_lots.no_lots": "No se han encontrado lotes fiscales detallados",
+  "expanded_lots.view_history": "Ver historial del lote",
+  "expanded_lots.unknown_exchange": "Desconocido",
+
+  // Lot Status — el vocabulario canónico OPEN | PARTIAL | CLOSED
+  "lot_status.open": "ABIERTO",
+  "lot_status.partial": "PARCIAL",
+  "lot_status.closed": "CERRADO",
+
+  // Tipos de disposición — por qué se consumió el lote
+  "disposal_type.sell": "VENTA",
+  "disposal_type.swap": "PERMUTA",
+  "disposal_type.fee": "COMISIÓN",
+  "disposal_type.spend": "GASTO",
+
+  // Custodia — dónde está ahora la cantidad del lote, frente a dónde se adquirió
+  "custody.acquired_at": "Plataforma de adquisición",
+  "custody.held_in": "Custodiado en",
+  "custody.synthetic": "Autocustodia",
+  "custody.synthetic_desc":
+    "No se registró destino para este movimiento, así que la cantidad se atribuye a una cuenta sintética de autocustodia. Declara el destino real para resolverlo.",
+  "custody.sub_wallet": "Subcuenta",
+  "custody.sub_wallet_desc":
+    "Custodiado en una subcuenta de la plataforma, como una cartera de staking o earn. El saldo de la cuenta padre no cambia.",
+  "custody.relocation": "Traslado",
+  "custody.no_pnl":
+    "Los movimientos de custodia no son transmisiones y no generan ganancia ni pérdida.",
+
+  // Procedencia del valor manual
+  "value_provenance.manual": "Declarado",
+  "value_provenance.manual_desc":
+    "Esta cifra se asignó a mano, no se observó en datos de mercado.",
+
+  // Marcas de calidad del dato — una etiqueta y una explicación por cada FIFO_QUALITY_FLAGS
+  "fifo_quality.missing_price.label": "Sin precio",
+  "fifo_quality.missing_price.explanation":
+    "No se pudo resolver un precio de mercado para esta operación, por lo que su valor es desconocido, no cero. Los eventos afectados quedan excluidos de la base fiscal hasta que se asigne un valor.",
+  "fifo_quality.missing_fx_rate.label": "Sin tipo de cambio",
+  "fifo_quality.missing_fx_rate.explanation":
+    "Se encontró un precio de mercado, pero en otra divisa, y no hay ningún tipo de cambio registrado para ese par en esta fecha ni antes. Carga el histórico de tipos de cambio, o asigna un valor en tu divisa de referencia, para resolverlo.",
+  "fifo_quality.currency_mismatch.label": "Divisa incoherente",
+  "fifo_quality.currency_mismatch.explanation":
+    "Un valor asignado a mano está expresado en una divisa distinta a la de la operación, así que no se puede saber cuál de las dos se pretendía. Reexpresa el valor en la divisa de la operación; hasta entonces los eventos afectados quedan fuera de la base fiscal.",
+  "fifo_quality.custody_residual.label": "Residuo de custodia",
+  "fifo_quality.custody_residual.explanation":
+    "Una cuenta de autocustodia mantiene más de lo que explican los movimientos registrados. La cantidad es autocustodia real o una comisión de red no registrada.",
+  "fifo_quality.untracked_inflow.label": "Entrada sin origen",
+  "fifo_quality.untracked_inflow.explanation":
+    "Llegó más de lo que salió de cuentas conocidas, así que existe una tenencia sin coste de adquisición establecido. Declara la cuenta de origen del movimiento para resolverlo.",
+  "fifo_quality.custody_imbalance.label": "Descuadre de custodia",
+  "fifo_quality.custody_imbalance.explanation":
+    "La custodia agregada difiere del saldo registrado de esta cuenta para el activo más allá de la tolerancia de precisión.",
+  "fifo_quality.negative_cost_basis.label": "Coste negativo",
+  "fifo_quality.negative_cost_basis.explanation":
+    "El coste de adquisición de este lote es negativo, lo que es un defecto del dato y no una entrada válida. Las ganancias derivadas de él se suprimen.",
+  "fifo_quality.orphan_lot.label": "Lote huérfano",
+  "fifo_quality.orphan_lot.explanation":
+    "La transacción de origen de esta fila derivada ya no existe, por lo que la última reconstrucción la retiró.",
+  "fifo_quality.unknown_tx_type.label": "Tipo desconocido",
+  "fifo_quality.unknown_tx_type.explanation":
+    "El tipo de operación de origen no se pudo asignar a ninguno conocido, así que la fila se rechazó en lugar de suponerlo.",
+  "fifo_quality.unresolved_basis.label": "Coste sin verificar",
+  "fifo_quality.unresolved_basis.explanation":
+    "El coste de adquisición de este lote no es una cifra positiva, por lo que no se puede derivar ninguna ganancia ni pérdida.",
+
+  // Token Details
+  "token.no_details": "No hay detalles disponibles para este activo.",
+  "token.details.title": "Detalles de {symbol}",
+  "token.details.subtitle": "Desglose histórico y fiscal completo",
+  "token.no_active_lots": "No hay lotes abiertos para este activo.",
+  "token.no_sales_history": "No hay historial de ventas.",
+  "token.gain_loss": "Ganancia / Pérdida",
+
+  // Transaction Types (from MockAdapter etc)
+  "tx_type.buy": "Compra",
+  "tx_type.sell": "Venta",
+  "tx_type.deposit": "Depósito",
+  "tx_type.airdrop": "Airdrop",
+
+  // Pagination
+  "pagination.prev": "Anterior",
+  "pagination.next": "Siguiente",
+  "pagination.showing": "Mostrando",
+  "pagination.to": "a",
+  "pagination.of": "de",
+  "pagination.results": "resultados",
+  "pagination.aria_label": "Paginación",
+
+  // Tax Domain
+  "tax.audit.badge_unconverted": "Sin convertir",
+  "tax.currency.figures_in": "Cifras en",
+  "tax.currency.converted_at_event_date": "convertidas al cambio de la fecha de cada operación",
+  "tax.currency.incomplete": "Incompleto: ninguna tasa de cambio cubre estas operaciones, por lo que quedan fuera de los totales anteriores.",
+  "tax.title": "Informe Fiscal",
+  "tax.subtitle": "Cumplimiento AEAT IRPF • Transacciones e Informe Fiscal",
+  "tax.transactions.title": "Transacciones Fiscales",
+  "tax.transactions.empty": "No se encontraron transacciones.",
+  "tax.col.date": "Fecha",
+  "tax.col.type": "Tipo",
+  "tax.col.asset": "Activo",
+  "tax.col.amount": "Cantidad",
+  "tax.col.price": "Precio (€)",
+  "tax.col.total": "Total (€)",
+  "tax.col.actions": "Acciones",
+  "tax.badge.edited": "Editado",
+  "tax.edit.title": "Editar transacción",
+  "tax.edit.description": "Edita cualquier campo que afecte a las plusvalías: cantidades, precio, comisión, fecha o tipo. Los eventos de venta se recalculan automáticamente al guardar.",
+  "tax.edit.save": "Guardar",
+  "tax.edit.saving": "Guardando…",
+  "tax.edit.saved": "Transacción actualizada.",
+  "tax.edit.restore": "Restaurar original",
+  "tax.edit.restore_confirm": "¿Descartar esta edición y restaurar los valores importados?",
+  "tax.edit.restore_confirm_button": "Restaurar",
+  "tax.edit.restored": "Transacción restaurada a sus valores originales.",
+  "tax.edit.cancel": "Cancelar",
+  "tax.edit.original": "Original",
+  "tax.edit.tolerance": "tolerancia",
+  "tax.edit.balance_warning": "Esta edición deja disposiciones o transferencias posteriores que superan las tenencias disponibles en ese momento.",
+  "tax.edit.error.title": "No se pudo guardar la edición",
+  "tax.edit.error.rejected": "La edición fue rechazada.",
+  "tax.edit.error.invalid_amount_in": "Introduce una cantidad decimal válida.",
+  "tax.edit.error.invalid_amount_out": "Introduce una cantidad decimal válida.",
+  "tax.edit.error.invalid_price_fiat": "Introduce un precio decimal válido y no negativo.",
+  "tax.edit.error.invalid_total_fiat": "Introduce un total decimal válido y no negativo.",
+  "tax.edit.error.invalid_timestamp": "Introduce una fecha y hora ISO-8601 válida.",
+  "tax.edit.error.invalid_tx_type": "Selecciona un tipo de transacción válido.",
+  "tax.edit.error.invalid_fee": "El valor de la comisión no es válido.",
+  "tax.edit.field.amount_in": "Cantidad entrante",
+  "tax.edit.field.amount_out": "Cantidad saliente",
+  "tax.edit.field.price_fiat": "Precio",
+  "tax.edit.field.total_fiat": "Total",
+  "tax.edit.field.timestamp": "Fecha",
+  "tax.edit.field.tx_type": "Tipo",
+  "tax.edit.lots_panel_title": "Lotes relacionados",
+  "tax.edit.lots_panel_note": "Los lotes adquiridos y consumidos de este activo se muestran en el historial del token.",
+  // Derivatives table columns
+  "tax.col.contract": "Contrato",
+  "tax.col.trade_price": "Precio operacion",
+  "tax.col.pnl": "PnL (€)",
+  "tax.col.fees_funding": "Fees + Funding",
+  "tax.col.status": "Estado",
+  "tax.derivatives.title": "Transacciones de Futuros y Derivados",
+  "tax.derivatives.empty": "No se encontraron operaciones de derivados.",
+  "tax.upload.title": "Subir Archivo Fiscal",
+  "tax.upload.subtitle":
+    "Compatible con CSV y XLSX de Kraken, Bitvavo, BitUnix, Tangem y Bit2Me.",
+  "tax.upload.btn": "Subir Archivo",
+  "tax.upload.uploading": "Subiendo...",
+  "tax.upload.select": "Selecciona un archivo CSV o XLSX",
+  "tax.import.title": "Importación Blockchain",
+  "ingestion.wizard.label": "Asistente de Importación",
+  "tax.import.subtitle":
+    "Importa transacciones directamente desde el ledger público.",
+  "tax.import.btn": "Importar",
+  "tax.import.importing": "Importando...",
+  "tax.import.chain_label": "Red",
+  "tax.import.address_placeholder": "Dirección de Wallet / ID de Cuenta",
+  "tax.delete.btn": "Borrar Todo",
+  "tax.delete.confirm":
+    "¿Estás seguro? Esto eliminará permanentemente todas las transacciones fiscales.",
+  "tax.entries": "ENTRADAS",
+
+  // Tax Report New Components
+  "tax.header.badge": "Motor de Cumplimiento",
+  "tax.header.sync": "Sync Web3",
+  "tax.header.upload": "Subir CSV",
+  "tax.wallets.upload": "Subir Wallets",
+  "tax.wallets.upload_success": "Wallets actualizadas con éxito",
+  "tax.wallets.upload_error": "Error al subir las wallets",
+  "tax.wallets.all": "Todas las Wallets",
+  "tax.wallets.tooltip_title": "Formato CSV requerido:",
+  "tax.header.pending": "Funcionalidad pendiente de integración con backend",
+  "tax.header.delete_title": "Eliminar datos",
+
+  "tax.summary.capital_gains": "Ganancias Patrimoniales",
+  "tax.summary.yields": "Rendimientos (Yields)",
+  "tax.summary.total_losses": "Pérdidas Compensables",
+  "tax.summary.estimated_irpf": "IRPF Estimado (Base Ahorro)",
+  "tax.summary.excluded_flagged_events":
+    "venta(s) excluida(s) de los totales anteriores por un defecto de calidad de datos.",
+  "tax.summary.excluded_unresolved_income":
+    "ingreso(s) excluido(s) de los totales anteriores porque no se pudo resolver su valor.",
+
+  "tax.integrity.title": "Hospital Fiscal",
+  "tax.integrity.analyzing": "Analizando integridad de datos...",
+  "tax.integrity.healthy":
+    "Los datos fiscales son consistentes. No se detectaron anomalías.",
+  "tax.integrity.pending_review":
+    "filas pendientes de tu intervención. Los informes siguen disponibles mientras tanto.",
+  "tax.integrity.needs_recalculation":
+    "Las cifras derivadas están pendientes de recálculo y pueden estar desactualizadas.",
+
+  // Revisión de valores pendientes
+  "tax.pending.title": "Pendiente de tu intervención",
+  "tax.pending.excluded_notice":
+    "Estas operaciones quedan excluidas de la base fiscal hasta que se declare un valor o un destino.",
+  "tax.pending.none": "No hay nada pendiente de tu intervención.",
+  "tax.pending.declare_price": "Declarar valor",
+  "tax.pending.declare_destination": "Declarar destino",
+  "tax.pending.select_account": "Selecciona una cuenta",
+  "tax.pending.save": "Guardar",
+  "tax.pending.fee_section_label": "Comisión sin resolver",
+
+  "tax.tabs.ledgers": "Libros de Operaciones",
+  "tax.tabs.report": "Auditoría e Informes",
+  "tax.tabs.chat": "Asistente IA",
+  "tax.tabs.in_development": "(En desarrollo)",
+  "tax.tabs.spot": "Operaciones Spot",
+  "tax.tabs.futures": "Futuros y Derivados",
+  "tax.tabs.spot_ledger": "Libro Spot",
+  "tax.tabs.futures_ledger": "Libro de Futuros",
+  "tax.tabs.spot_dev": "OPERACIONES SPOT EN DESARROLLO (Filtro Año: {year})",
+  "tax.tabs.futures_dev":
+    "FUTUROS Y DERIVADOS EN DESARROLLO (Filtro Año: {year})",
+  "tax.tabs.chat_dev": "ASISTENTE IA EN DESARROLLO",
+  "tax.filters.year": "Año",
+  "tax.filters.all": "Todos",
+
+  // Tax Audit Report Tab (TaxFiscalControls + TaxReportDetailsTable)
+  "tax.audit.fiscal_year": "Ejercicio Fiscal",
+  "tax.audit.method": "Método de Cálculo",
+  "tax.audit.method_fifo": "FIFO (Primero en entrar, primero en salir)",
+  "tax.audit.recalculate": "Recalcular",
+  "tax.audit.recalculating": "Recalculando...",
+  "tax.audit.download_report": "Descargar Informe",
+  "tax.audit.downloading": "Descargando...",
+  "tax.audit.download_pdf": "PDF",
+  "tax.audit.download_csv": "CSV",
+  "tax.audit.controls_title": "Parámetros de Cálculo",
+  "tax.audit.controls_desc":
+    "Ejercicio fiscal y método FIFO para generación de libro de auditoría AEAT.",
+
+  // Audit Trail Table
+  "tax.audit.table_title": "Libro de Trazabilidad FIFO (Auditoría AEAT)",
+  "tax.audit.table_empty":
+    "No hay datos disponibles para el ejercicio seleccionado.",
+  "tax.audit.table_loading": "Generando Libro de Auditoría...",
+  "tax.audit.col_date": "Fecha",
+  "tax.audit.col_operation": "Operación",
+  "tax.audit.col_asset": "Activo",
+  "tax.audit.col_exchange": "Exchange",
+  "tax.audit.col_amount": "Unidades",
+  "tax.audit.col_sale_price": "Precio Venta",
+  "tax.audit.col_gain_loss": "PyG",
+  "tax.audit.col_fee": "Comisión (€)",
+  "tax.audit.col_taxable": "Imponible",
+  "tax.audit.col_notes": "Trazabilidad",
+  "tax.audit.taxable_yes": "SÍ",
+  "tax.audit.taxable_no": "NO",
+  "tax.audit.badge_gain": "GANANCIA",
+  "tax.audit.badge_loss": "PÉRDIDA",
+  "tax.audit.badge_exempt": "EXENTO",
+  "tax.audit.badge_activation": "RESERVA",
+  "tax.audit.badge_unresolved": "PENDIENTE",
+
+  // Vault Settings
+  "vault.title": "Bóveda de Secretos",
+  "vault.subtitle": "Bóveda Criptográfica AES-256-GCM",
+  "vault.locked.title": "Bóveda Bloqueada",
+  "vault.locked.desc":
+    "Introduce tu contraseña maestra para desbloquear y acceder a tus credenciales locales.",
+  "vault.locked.password_placeholder": "Contraseña maestra",
+  "vault.locked.unlock_btn": "Desbloquear Bóveda",
+  "vault.unlocked.title": "Bóveda Desbloqueada",
+  "vault.unlocked.desc":
+    "Tu bóveda está desbloqueada. Puedes gestionar de forma segura tus claves de integración a continuación.",
+
+  // Grupos de categorías de proveedores del vault
+  "vault.category.exchange": "Exchanges",
+  "vault.category.market-data": "Datos de Mercado",
+  "vault.category.ai-model": "Proveedores de IA",
+
+  // Vault Dynamic Providers
+  "vault.provider.generic.description":
+    "Sincroniza el API KEY de {providerName} de forma segura.",
+  "vault.provider.generic.fields.format_title":
+    "Solo se permiten caracteres alfanuméricos y símbolos básicos (-_+=/.)",
+  "vault.provider.generic.fields.apiKey.label": "API Key",
+  "vault.provider.generic.fields.apiSecret.label": "API Secret",
+
+  "vault.errors.invalid_format":
+    "Formato inválido: Caracteres no permitidos detectados",
+  "vault.errors.invalid_password": "La contraseña proporcionada es incorrecta",
+  "vault.errors.unknown_provider": "El proveedor especificado no es válido",
+  "vault.errors.unlock_failed": "Fallo al desbloquear la bóveda",
+  "vault.errors.save_failed": "Error al guardar credenciales",
+  "vault.errors.toggle_failed": "Error al cambiar el estado del proveedor",
+  "vault.success.unlocked": "Bóveda desbloqueada con éxito",
+  "vault.success.saved": "Credenciales guardadas de forma segura",
+
+  // Estado y Acciones del Vault
+  "vault.provider.status.configured": "Vinculado",
+  "vault.provider.status.not_configured": "No vinculado",
+  "vault.actions.save": "Guardar",
+
+  // Data Ingestion Wizard
+  "ingestion.wizard.title": "Asistente de Importación",
+  "ingestion.wizard.subtitle":
+    "Sube un archivo para validar y mapear tus datos antes de insertarlos en el sistema.",
+  "ingestion.wizard.step_upload": "Subir Archivo",
+  "ingestion.wizard.step_review": "Revisión",
+  "ingestion.wizard.step_success": "¡Validación Correcta!",
+  "ingestion.wizard.market_type_label": "Tipo de mercado",
+  "ingestion.wizard.timezone_label": "Zona Horaria",
+  "ingestion.wizard.market_spot": "Mercado Spot",
+  "ingestion.wizard.market_futures": "Futuros / Derivados",
+  "ingestion.wizard.account_label": "Exchange / Cuenta",
+  "ingestion.wizard.account_placeholder": "Selecciona o añade cuenta...",
+  "ingestion.wizard.add_account": "Añadir Cuenta",
+  "ingestion.wizard.new_account_placeholder": "Nombre de la nueva cuenta",
+  "ingestion.wizard.add_btn": "Añadir",
+  "ingestion.wizard.cancel_btn": "Cancelar",
+  "ingestion.profile.label": "Formato de origen",
+  "ingestion.profile.placeholder": "Selecciona el origen de este archivo...",
+  "ingestion.profile.ambiguous": "Esta fila de cabeceras coincide con más de un origen; elige uno antes de continuar:",
+  "ingestion.profile.invariant.verified": "El saldo acumulado del propio origen cuadra en filas comprobadas:",
+  "ingestion.profile.invariant.not_declared": "Este origen no aporta ninguna comprobación independiente, así que su convención no puede confirmarse desde el archivo.",
+  "ingestion.profile.invariant.could_not_verify": "Ninguna fila de este archivo contiene los valores que la comprobación necesita, así que no se ha confirmado nada.",
+  "ingestion.profile.invariant.failed": "Los totales del propio origen no cuadran con este formato. Revisa la selección antes de importar.",
+  "ingestion.profile.invariant.profile_not_chosen": "Elige un formato de origen para comprobar este archivo.",
+  "ingestion.wizard.account_exists": "La cuenta ya existe",
+
+  // Dropzone Area
+  "ingestion.dropzone.drag_drop":
+    "Arrastra y suelta tu archivo CSV o XLSX aquí",
+  "ingestion.dropzone.or_click": "o haz clic para seleccionar un archivo",
+  "ingestion.dropzone.format_help":
+    "Soporta CSV y XLSX de Kraken, Bitvavo, Bit2Me y otros",
+
+  // Data Grid Validator
+  "ingestion.grid.parsing": "Procesando archivo, por favor espera...",
+  "ingestion.grid.unsupported": "Esperando archivo...",
+  "ingestion.grid.ready_to_import":
+    "Todos los registros son válidos. Listo para importar.",
+  "ingestion.grid.fix_errors":
+    "Por favor, corrige {count} filas con errores antes de continuar.",
+  "ingestion.grid.imported_success":
+    "Archivo importado con éxito. Las transacciones han sido registradas.",
+  "ingestion.grid.col_status": "Estado",
+  "ingestion.grid.select_mapping": "Seleccionar campo...",
+  "ingestion.grid.mapping_unmapped": "Sin mapear",
+  "ingestion.grid.cell_error": "Requerido o formato inválido",
+
+  "ingestion.errors.asset_required": "El identificador del activo/moneda es obligatorio",
+  "ingestion.errors.missing_both_assets": "Las transacciones direccionales requieren al menos un activo",
+
+  // Ingestion Columns
+  "ingestion.columns.date": "Fecha / Hora",
+  "ingestion.columns.timezone": "Zona Horaria",
+  "ingestion.columns.type": "Tipo (Compra, Venta, Retiro...)",
+  "ingestion.columns.ticker": "Moneda / Asset",
+  "ingestion.columns.amount": "Cantidad",
+  "ingestion.columns.price": "Precio",
+  "ingestion.columns.fee": "Comisión",
+  "ingestion.columns.feeAsset": "Moneda Comisión",
+  "ingestion.columns.txId": "ID Transacción (TxId)",
+  "ingestion.columns.orderId": "ID Pedido",
+  "ingestion.columns.network": "Red / Cadena",
+  "ingestion.columns.fiatValue": "Valor Fiat",
+  "ingestion.columns.fiatCurrency": "Moneda Fiat",
+  "ingestion.columns.sourceAddress": "Dirección Origen",
+  "ingestion.columns.destinationAddress": "Dirección Destino",
+  "ingestion.columns.balance": "Saldo / Balance",
+  "ingestion.columns.pnl": "Beneficio / Pérdida",
+  "ingestion.columns.exchange": "Exchange / Plataforma",
+  "ingestion.columns.description": "Descripción / Nota",
+  "ingestion.columns.time": "Hora",
+  "ingestion.columns.status": "Estado",
+  "ingestion.columns.source_address": "Dirección Origen",
+  "ingestion.columns.destination_address": "Dirección Destino",
+  "ingestion.columns.tx_id": "ID Transacción",
+  "ingestion.columns.group_id": "ID Grupo",
+  "ingestion.columns.tx_type": "Tipo de Transacción",
+  "ingestion.columns.asset": "Activo",
+  "ingestion.columns.amount_in": "Cantidad de Entrada",
+  "ingestion.columns.asset_in": "Activo de Entrada",
+  "ingestion.columns.amount_out": "Cantidad de Salida",
+  "ingestion.columns.asset_out": "Activo de Salida",
+  "ingestion.columns.total_fiat": "Total Fiat",
+  "ingestion.columns.price_fiat": "Precio Fiat",
+  "ingestion.columns.quote_currency": "Moneda de Cotización (Quote)",
+  "ingestion.columns.fiat_currency": "Moneda Total (Fiat/Valor)",
+  "ingestion.columns.fee_amount": "Comisión",
+  "ingestion.columns.fee_currency": "Moneda Comisión",
+  "ingestion.columns.symbol": "Símbolo / Contrato",
+  "ingestion.columns.realized_pnl": "PnL Realizado",
+  "ingestion.columns.pnl_currency": "Moneda PnL",
+  "ingestion.columns.funding_amount": "Funding / Financiación",
+  "ingestion.columns.funding_currency": "Moneda Funding",
+  "ingestion.columns.metadata": "Metadatos (Pasarela)",
+
+  // Ingestion Errors
+  "ingestion.errors.tx_type_required": "El tipo de transacción es requerido",
+  "ingestion.errors.amount_invalid": "La cantidad debe ser un número válido",
+  "ingestion.errors.financial_data_missing":
+    "Faltan datos financieros: Debes proporcionar Cantidad+Activo, Totales Fiat, o Campos de Dirección",
+  "ingestion.errors.time_data_missing":
+    "Faltan datos de tiempo: Debes proporcionar Fecha o Timestamp",
+  "ingestion.errors.unsupported_format":
+    "Formato no soportado. Por favor, sube un archivo CSV o Excel.",
+  "ingestion.errors.unknown_parsing_error":
+    "Error desconocido al procesar el archivo.",
+  "ingestion.errors.no_sheets": "No se encontraron hojas en el archivo Excel.",
+  "ingestion.errors.file_empty": "El archivo está vacío.",
+  "ingestion.errors.read_failed": "Error al leer el archivo.",
+  "ingestion.errors.no_valid_data": "No se encontraron datos válidos.",
+  "ingestion.errors.no_valid_rows_to_import":
+    "No hay filas válidas para importar.",
+  "ingestion.errors.unknown_submission_error":
+    "Error desconocido durante la importación.",
+
+  // Market Data Provider Settings
+  "market.title": "Datos de Mercado",
+  "market.subtitle": "Configura los proveedores de precio en tiempo real",
+  "market.provider.kraken.name": "Kraken",
+  "market.provider.kraken.desc": "Feed de precios WebSocket en tiempo real",
+  "market.provider.coingecko.name": "CoinGecko",
+  "market.provider.coingecko.desc": "Polling REST cada 60 s",
+  "market.provider.active": "Activo",
+  "market.provider.inactive": "Inactivo",
+  "market.provider.category.crypto": "Cripto",
+  "market.provider.category.general": "General",
+  "market.provider.exclusive_note": "Solo puede haber un proveedor activo por categoría",
+  "market.provider.success": "Proveedor de mercado actualizado con éxito",
+  "market.provider.error": "Error al actualizar el proveedor de mercado",
+  "vault.provider.market_data.title": "Proveedor de Precios en Tiempo Real",
+  "vault.provider.market_data.desc": "Usa este proveedor para obtener los datos globales del mercado.",
+  "market.stream.connected": "Conectado",
+  "market.stream.disconnected": "Desconectado",
+
+  // Advisor panel
+  "advisor.title": "Asesor",
+  "advisor.description": "Haz preguntas sobre tu cartera y tus impuestos.",
+  "advisor.close": "Cerrar asesor",
+  "advisor.input.label": "Escribe al asesor",
+  "advisor.input.placeholder": "Pregunta sobre tu cartera o tus impuestos",
+  "advisor.send": "Enviar",
+  "advisor.stop": "Detener",
+  "advisor.retry": "Reintentar",
+  "advisor.stopped": "Detenido",
+  "advisor.empty.title": "Pregunta sobre tu cartera o tus impuestos",
+  "advisor.empty.subtitle": "Las respuestas se basan en los datos de tu propio libro de operaciones.",
+  "advisor.refused.title": "Respuesta retenida",
+  "advisor.failed.settings_cta": "Abrir ajustes de credenciales",
+  "advisor.failed.NO_MODEL_AVAILABLE.title": "Ningún modelo disponible",
+  "advisor.failed.NO_MODEL_AVAILABLE.body": "Añade un proveedor de modelos o inicia un modelo local para usar el asesor.",
+  "advisor.failed.VAULT_LOCKED.title": "Bóveda bloqueada",
+  "advisor.failed.VAULT_LOCKED.body": "Desbloquea la bóveda para que el asesor pueda usar las claves de proveedor guardadas.",
+  "advisor.failed.ALL_PROVIDERS_FAILED.title": "Ningún proveedor respondió",
+  "advisor.failed.ALL_PROVIDERS_FAILED.body": "Todos los modelos configurados fallaron al responder.",
+  "advisor.failed.advisor_settings_cta": "Abrir ajustes del asesor",
+  "advisor.failed.ALL_PROVIDERS_FAILED.auth-rejected.title": "{provider} rechazó la clave de API",
+  "advisor.failed.ALL_PROVIDERS_FAILED.auth-rejected.body":
+    "{provider} no aceptó las credenciales usadas para {model}. Revisa la clave de API en los ajustes de credenciales: debe ser una clave de API creada en tu cuenta de {provider}, no una clave pública.",
+  "advisor.failed.ALL_PROVIDERS_FAILED.model-not-found.title": "{provider} no conoce el modelo {model}",
+  "advisor.failed.ALL_PROVIDERS_FAILED.model-not-found.body":
+    "Revisa el identificador del modelo en Ajustes, Asesor de IA. Algunos proveedores usan nombres distintos para el mismo modelo.",
+  "advisor.failed.ALL_PROVIDERS_FAILED.rate-limited.title": "{provider} está limitando las solicitudes",
+  "advisor.failed.ALL_PROVIDERS_FAILED.rate-limited.body":
+    "{provider} rechazó {model} porque se enviaron demasiadas solicitudes. Inténtalo de nuevo dentro de un rato.",
+  "advisor.failed.ALL_PROVIDERS_FAILED.provider-unavailable.title": "{provider} no está disponible temporalmente",
+  "advisor.failed.ALL_PROVIDERS_FAILED.provider-unavailable.body":
+    "{provider} devolvió un error de servidor para {model}. Suele ser temporal, así que inténtalo de nuevo.",
+  "advisor.failed.ALL_PROVIDERS_FAILED.network.title": "No se pudo contactar con {provider}",
+  "advisor.failed.ALL_PROVIDERS_FAILED.network.body":
+    "Falló la conexión con {provider} para {model}. Revisa tu conexión de red e inténtalo de nuevo.",
+  "advisor.failed.INTERNAL_ERROR.title": "Algo salió mal",
+  "advisor.failed.INTERNAL_ERROR.body": "El asesor encontró un error inesperado.",
+  "advisor.transport.network": "Se perdió la conexión. La respuesta está incompleta.",
+  "advisor.transport.http_temporary": "El asesor no está disponible ahora mismo. Inténtalo de nuevo en un momento.",
+  "advisor.transport.http_rejected": "No se pudo enviar este mensaje.",
+  "advisor.transport.no_body": "El asesor respondió sin contenido.",
+  "advisor.transport.invalid_frame": "El asesor envió una respuesta mal formada, así que se detuvo la respuesta.",
+  "advisor.transport.stream_ended": "La respuesta terminó de forma inesperada y puede estar incompleta.",
+  "advisor.tool.status.running": "En curso",
+  "advisor.tool.status.finished": "Terminada",
+  "advisor.tool.status.failed": "Fallida",
+  "advisor.tool.portfolio_summary": "Resumen de cartera",
+  "advisor.tool.fiscal_integrity": "Comprobación de integridad fiscal",
+  "advisor.tool.token_history": "Historial del token",
+  "advisor.tool.asset_allocation": "Distribución de activos",
+  "advisor.tool.risk_metrics": "Métricas de riesgo",
+  "advisor.tool.drawdown_curve": "Curva de drawdown",
+  "advisor.tool.performance_history": "Historial de rendimiento",
+  "advisor.tool.kpis": "Indicadores clave",
+  "advisor.tool.volatility_heatmap": "Mapa de calor de volatilidad",
+  "advisor.tool.spanish_tax_report": "Informe fiscal español",
+  "advisor.tool.live_prices": "Precios en vivo",
+  "advisor.tool.fiscal_integrity_rows": "Filas de integridad fiscal",
+  "advisor.tool.token_lots": "Lotes del token",
+  "advisor.tool.tx_search": "Búsqueda de transacciones",
+  "advisor.tool.concentration_risk": "Riesgo de concentración",
+  "advisor.tool.scenario_portfolio_shock": "Escenario de shock de cartera",
+  "advisor.tool.breakeven_price": "Precio de equilibrio",
+  "advisor.tool.scenario_position_value": "Escenario de valor de posición",
+  "advisor.tool.explain_metric": "Definición de métrica",
+  "advisor.tool.data_gaps": "Lagunas de datos",
+  "advisor.tool.custody_locations": "Ubicaciones de custodia",
+  "advisor.tool.derivatives_pnl": "PnL de derivados",
+  "advisor.tool.tax_year_comparison": "Comparación de años fiscales",
+  "advisor.tool.account_holdings": "Posiciones de la cuenta",
+  "advisor.tool.holding_detail": "Detalle de la posición",
+  "advisor.new_conversation": "Nueva conversación",
+  "advisor.open": "Abrir asesor",
+  "advisor.empty.group.taxes": "Impuestos",
+  "advisor.empty.group.portfolio": "Tu cartera",
+  "advisor.empty.question.taxes_review": "¿Qué debería revisar primero en mi informe fiscal?",
+  "advisor.empty.question.taxes_warnings": "¿Qué transmisiones del ejercicio fiscal tienen avisos de calidad de datos?",
+  "advisor.empty.question.portfolio_allocation": "¿Cómo está distribuida mi cartera hoy?",
+  "advisor.empty.question.portfolio_risk": "¿Qué activo aporta más riesgo a mi cartera?",
+  "advisor.refused.rephrase.label": "Preguntarlo sobre mis propios datos",
+  "advisor.refused.rephrase.message": "Responde usando solo los datos de mi propia cartera, sin previsiones ni recomendaciones: {question}",
+  "advisor.profile.local": "local",
+  "advisor.profile.cloud": "nube",
+  "advisor.profile.local_hint": "Este modelo se ejecuta en tu equipo.",
+  "advisor.profile.cloud_hint": "Tus mensajes y las cifras que lee el asesor salen de este equipo.",
+  "advisor.disclaimer": "Esto no es asesoramiento financiero. Es una proyección basada en los datos de tu propia cartera, no una recomendación.",
+  "advisor.figures_incomplete.label": "Cifras incompletas",
+  "advisor.figures_incomplete.hint": "Faltaban algunos tipos de cambio o precios, por lo que los totales de esta respuesta pueden ser parciales.",
+  "advisor.steps.label": "Pasos usados",
+  "advisor.tool.status.interrupted": "Interrumpida",
+  "settings.advisor.title": "Asesor de IA",
+  "settings.advisor.description": "Elige qué modelos responden tus preguntas y cuántos datos puede leer cada respuesta.",
+  "settings.advisor.load_failed": "No se pudo cargar la configuración del asesor.",
+  "settings.advisor.chain.title": "Cadena de modelos",
+  "settings.advisor.chain.description": "El asesor prueba las entradas en orden y usa la primera que pueda responder.",
+  "settings.advisor.chain.empty.title": "No hay cadena de modelos configurada",
+  "settings.advisor.chain.empty.body": "Hasta que añadas un modelo, el asesor responderá \"no hay modelo disponible\".",
+  "settings.advisor.chain.add": "Añadir modelo",
+  "settings.advisor.chain.save": "Guardar cadena",
+  "settings.advisor.chain.saving": "Guardando…",
+  "settings.advisor.chain.saved": "Cadena de modelos guardada.",
+  "settings.advisor.chain.failed": "No se pudo guardar la cadena de modelos. Tus cambios se conservan: corrígelos e inténtalo de nuevo.",
+  "settings.advisor.chain.entry.position": "Entrada {position}",
+  "settings.advisor.chain.entry.provider": "Proveedor",
+  "settings.advisor.chain.entry.model": "ID del modelo",
+  "settings.advisor.chain.entry.model_placeholder": "p. ej. gpt-5 o llama3",
+  "settings.advisor.chain.entry.context_window": "Ventana de contexto (tokens)",
+  "settings.advisor.chain.entry.context_window_hint": "La declaras tú; el asesor dimensiona los resultados de sus herramientas a partir de ella.",
+  "settings.advisor.chain.entry.cloud_suffix_hint": "Ollama Cloud usa los nombres sin sufijo de su API (por ejemplo gpt-oss:120b). Los nombres que terminan en -cloud o :cloud pertenecen al proveedor Ollama local.",
+  "settings.advisor.chain.entry.move_up": "Subir la entrada {position}",
+  "settings.advisor.chain.entry.move_down": "Bajar la entrada {position}",
+  "settings.advisor.chain.entry.remove": "Quitar la entrada {position}",
+  "settings.advisor.chain.error.empty": "Añade al menos un modelo antes de guardar.",
+  "settings.advisor.chain.error.model_required": "Introduce el ID del modelo.",
+  "settings.advisor.chain.error.context_window_required": "Un modelo local necesita su ventana de contexto: un número entero positivo de tokens.",
+  "settings.advisor.chain.error.invalid": "La cadena no es válida y no se envió.",
+  "settings.advisor.provider.openai": "OpenAI",
+  "settings.advisor.provider.anthropic": "Anthropic",
+  "settings.advisor.provider.google": "Google",
+  "settings.advisor.provider.opencode": "OpenCode",
+  "settings.advisor.provider.ollama": "Ollama",
+  "settings.advisor.provider.ollama-cloud": "Ollama Cloud",
+  "settings.advisor.locality.local": "Local",
+  "settings.advisor.locality.cloud": "Nube",
+  "settings.advisor.locality.local_hint": "Se ejecuta en tu equipo.",
+  "settings.advisor.locality.cloud_hint": "Tus mensajes y las cifras que lee el asesor salen de este equipo.",
+  "settings.advisor.profile.local": "Límites locales",
+  "settings.advisor.profile.metered": "Límites de pago por uso",
+  "settings.advisor.credential.absent": "No hay ninguna credencial guardada para este proveedor, así que el asesor omite esta entrada.",
+  "settings.advisor.credential.locked": "La bóveda está bloqueada, así que el asesor omite esta entrada.",
+  "settings.advisor.credential.link": "Abrir credenciales",
+  "settings.advisor.limits.title": "Límites de ejecución",
+  "settings.advisor.limits.description": "Cuántos pasos puede dar una respuesta y cuántos datos puede devolver cada herramienta, según el tipo de modelo.",
+  "settings.advisor.limits.profile_group": "Perfil",
+  "settings.advisor.limits.profile.metered": "Pago por uso",
+  "settings.advisor.limits.profile.local": "Local",
+  "settings.advisor.limits.field.maxSteps": "Pasos por respuesta",
+  "settings.advisor.limits.field.lastMessages": "Mensajes recordados",
+  "settings.advisor.limits.field.topNHoldings": "Principales posiciones devueltas",
+  "settings.advisor.limits.field.lotsPageSize": "Lotes por página",
+  "settings.advisor.limits.field.rowsPageSize": "Filas por página",
+  "settings.advisor.limits.tool_budgets.title": "Caracteres por resultado de herramienta",
+  "settings.advisor.limits.tool_budgets.description": "Un resultado más largo se recorta y se marca como truncado.",
+  "settings.advisor.limits.local_budgets.title": "Presupuestos locales",
+  "settings.advisor.limits.local_budgets.description": "Se derivan de la ventana de contexto de cada modelo local, por eso se muestran aquí pero nunca se guardan ni se editan.",
+  "settings.advisor.limits.local_budgets.none": "Añade a la cadena un modelo local con ventana de contexto y sus presupuestos derivados aparecerán aquí.",
+  "settings.advisor.limits.local_budgets.tool": "Por resultado de herramienta",
+  "settings.advisor.limits.local_budgets.run": "Por respuesta, todas las herramientas",
+  "settings.advisor.limits.local_budgets.unit": "caracteres",
+  "settings.advisor.limits.reset": "Restablecer valores por defecto",
+  "settings.advisor.limits.save": "Guardar límites",
+  "settings.advisor.limits.saving": "Guardando…",
+  "settings.advisor.limits.saved": "Límites de ejecución guardados.",
+  "settings.advisor.limits.failed": "No se pudieron guardar los límites. Tus cambios se conservan: corrígelos e inténtalo de nuevo.",
+  "settings.advisor.limits.error.whole_number": "Introduce un número entero positivo.",
+  "settings.advisor.limits.error.max": "Como máximo {max}.",
+};

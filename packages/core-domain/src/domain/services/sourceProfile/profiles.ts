@@ -1,0 +1,244 @@
+import type { SourceFormatProfileTable } from "./types";
+
+/**
+ * The measured export formats.
+ *
+ * Every declaration here was reconciled arithmetically rather than anticipated: the header rows are
+ * the exchange's own, the conventions were checked against the sample rows, and where a source ships
+ * no independent redundancy the invariant says so instead of asserting something the profile itself
+ * computes.
+ *
+ * Typed as a total record over the identifier vocabulary, so adding a source without a profile is a
+ * compile error rather than a silent fallthrough at run time.
+ */
+export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
+  "kraken-spot": {
+    id: "kraken-spot",
+    label: "Kraken (spot ledger)",
+    market: { kind: "SPOT" },
+    signature: {
+      kind: "HEADER_SET",
+      required: ["txid", "refid", "aclass", "subclass", "wallet", "balance"],
+      forbidden: ["position uid", "funding rate", "Tipo de operación", "Outgoing Asset"],
+    },
+    // No fee-currency column: the fee is charged in the asset the row moves.
+    feeDenomination: { kind: "ROW_ASSET" },
+    // `amount` is net and `fee` is charged on top. Established by the running balance, not assumed:
+    // `7704.160 PUMP` with a `17.720` fee lands as `7686.440`.
+    feeConvention: { kind: "NET_PLUS_FEE" },
+    directionalFill: { kind: "ONE_SIDED" },
+    columnRoles: {
+      references: ["refid"],
+      categoryLabels: ["type", "subtype", "aclass", "subclass", "wallet"],
+    },
+    // `balance = previous + amount − fee` per asset: reconciled on every sample row, and Kraken's
+    // own documentation states the formula. The column takes no part in any derivation.
+    // `txid` is unique on every row; `refid` repeats across the legs of one operation, which is why
+    // that one is the merge key and this one the identity.
+    rowIdentity: { kind: "DECLARED_FIELD", field: "tx_id" },
+    invariant: { kind: "RUNNING_BALANCE", rowOrder: "OLDEST_FIRST" },
+  },
+
+  "kraken-futures": {
+    id: "kraken-futures",
+    label: "Kraken (futures ledger)",
+    market: { kind: "FUTURES" },
+    signature: {
+      kind: "HEADER_SET",
+      required: ["uid", "dateTime", "funding rate", "realized pnl", "position uid"],
+      forbidden: ["txid", "Tipo de operación"],
+    },
+    feeDenomination: { kind: "COLLATERAL_CURRENCY" },
+    feeConvention: { kind: "NET_PLUS_FEE" },
+    directionalFill: { kind: "ONE_SIDED" },
+    columnRoles: {
+      // `uid` is unique on every row of a full export: it names the row, not the operation, so
+      // it can never link two rows and is not a reference. It is also what the mapper reads as
+      // `tx_id`, which is the field a per-row identifier belongs in.
+      references: [],
+      categoryLabels: ["account", "type", "contract", "position uid"],
+    },
+    /**
+     * `new balance` is a running balance and it very nearly qualifies: read oldest-first per
+     * (account, symbol) it reconciles on all but one row of a full export. The single break is a EUR
+     * conversion whose stated balance is rounded — Kraken's own figure is 167.75030000000 where the
+     * arithmetic gives 167.75032984614 — so the redundancy is not exact, and an inexact invariant
+     * needs a tolerance, which is what hides real drift. Declared as none until the futures
+     * ingestion path exists to measure it properly.
+     */
+    // `uid` is unique on every row of a full export.
+    rowIdentity: { kind: "DECLARED_FIELD", field: "tx_id" },
+    invariant: { kind: "NONE" },
+  },
+
+  "bit2me-spot": {
+    id: "bit2me-spot",
+    label: "Bit2Me",
+    market: { kind: "SPOT" },
+    signature: {
+      kind: "HEADER_SET",
+      required: [
+        "Tipo de operación",
+        "Cantidad de destino",
+        "Moneda de destino",
+        "Cantidad de origen",
+        "Moneda de origen",
+        "Comisión de la operación",
+        "Moneda de la comisión",
+        "Grupo",
+        "Fecha",
+      ],
+      forbidden: [],
+    },
+    // `Moneda de la comisión` varies per row: it names the acquired asset on trade rows
+    // and EUR on movement rows. The column is therefore read per row, like Bitvavo's.
+    feeDenomination: { kind: "NAMED_COLUMN", sourceColumn: "Moneda de la comisión" },
+    // Origin and destination are both written, so the fee is their difference.
+    feeConvention: { kind: "GROSS_AND_NET" },
+    // All 42 `Deposit` rows repeat the same asset and amount on both sides. This is also what makes
+    // the euro figure on a movement row a valuation rather than a quantity: the fee that really left
+    // the wallet is `origen − destino` in the asset, and the euro number is only its price.
+    directionalFill: { kind: "BOTH_SIDES_WRITTEN" },
+    columnRoles: {
+      // `Grupo` holds wallet compartments — earn, trading, pocket, blockchain, bank-transfer — so a
+      // whole history shares a handful of values. Merging on it collapses unrelated rows into a few.
+      references: [],
+      categoryLabels: ["Grupo", "Exchange", "Tipo de operación"],
+    },
+    // Gross, net and fee are three columns of which the profile derives one, so any relation among
+    // them is a tautology. Bit2Me's convention is caught by the digit-for-digit net, not here.
+    // `Descripción` holds `<compartment> <uuid>` and is unique per row. It is the only thing that tells
+    // apart duplicate fills identical in every other column — a content-derived hash merged such a
+    // pair into one operation and lost a fill outright.
+    rowIdentity: { kind: "DECLARED_FIELD", field: "description" },
+    invariant: { kind: "NONE" },
+  },
+
+  "bitvavo-spot": {
+    id: "bitvavo-spot",
+    label: "Bitvavo",
+    market: { kind: "SPOT" },
+    signature: {
+      kind: "HEADER_SET",
+      required: [
+        "Timezone",
+        "Quote Currency",
+        "Quote Price",
+        "Received / Paid Currency",
+        "Received / Paid Amount",
+        "Fee currency",
+        "Fee amount",
+        "Transaction ID",
+      ],
+      forbidden: [],
+    },
+    // The column really does vary inside one file: EUR on a buy, XRP on a withdrawal.
+    feeDenomination: { kind: "NAMED_COLUMN", sourceColumn: "Fee currency" },
+    // The paid total already contains the fee: 0.30338 × 1645 = 499.0601, plus 0.7499, is the
+    // 499.81 the row reports as paid. Adding the fee again would raise the basis to 500.5599.
+    feeConvention: { kind: "FEE_INSIDE_TOTAL" },
+    directionalFill: { kind: "ONE_SIDED" },
+    columnRoles: {
+      // Unique on every sample row, and the source writes one row per operation — both sides of a
+      // trade sit in `Amount` and `Received / Paid Amount` — so there is never a second leg to link.
+      // Like Bitunix's `Trx. ID`, the name suggests a reference and the data refuses it.
+      references: [],
+      categoryLabels: ["Type", "Status", "Timezone"],
+    },
+    // `quantity × price + fee = paid` spans four columns, none derived from the others. Exact on every
+    // row that carries the four values; deposits and withdrawals carry no price, which the check
+    // reports as unverifiable rather than passing.
+    // `Transaction ID` is unique on every row.
+    rowIdentity: { kind: "DECLARED_FIELD", field: "tx_id" },
+    invariant: { kind: "OVER_DETERMINED_ROW" },
+  },
+
+  "bitunix-spot": {
+    id: "bitunix-spot",
+    label: "Bitunix",
+    market: { kind: "SPOT" },
+    signature: {
+      kind: "HEADER_SET",
+      required: [
+        "Date (UTC)",
+        "Label",
+        "Outgoing Asset",
+        "Outgoing Amount",
+        "Incoming Asset",
+        "Incoming Amount",
+        "Fee Asset",
+        "Fee Amount",
+        "Trx. ID",
+      ],
+      forbidden: [],
+    },
+    feeDenomination: { kind: "NAMED_COLUMN", sourceColumn: "Fee Asset" },
+    // The outgoing amount is net: 546.844684 withdrawn plus a 1 ADA fee is exactly the 547.844684
+    // the two deposits credited.
+    feeConvention: { kind: "NET_PLUS_FEE" },
+    directionalFill: { kind: "ONE_SIDED" },
+    columnRoles: {
+      // `Trx. ID` looks like a reference and is not one: the same id can appear on two distinct
+      // deposits made minutes apart. Declaring it a reference would offer the aggregator a merge key
+      // that merges unrelated operations.
+      references: [],
+      categoryLabels: ["Label", "Comment", "Trx. ID"],
+    },
+    // `Trx. ID` is NOT an identity: one id can label two separate deposits made minutes apart.
+    // Declaring it would merge them, so the rows are told apart by their content — and the mapped
+    // `tx_id` is suppressed, because reading it regardless is what made this a live defect.
+    rowIdentity: { kind: "CONTENT_DERIVED" },
+    invariant: { kind: "NONE" },
+  },
+
+  tangem: {
+    id: "tangem",
+    label: "Tangem",
+    market: { kind: "SPOT" },
+    signature: {
+      kind: "HEADER_SET",
+      required: ["Date", "Type", "Asset", "Amount", "Fee", "Notes"],
+      // A six-column Date/Type/Asset/Amount/Fee/Notes export is a genuine subset of what a minimal
+      // export elsewhere could produce, so this profile needs negative evidence before it wins.
+      forbidden: [
+        "txid",
+        "refid",
+        "subclass",
+        "uid",
+        "position uid",
+        "Quote Currency",
+        "Transaction ID",
+        "Outgoing Asset",
+        "Tipo de operación",
+      ],
+    },
+    feeDenomination: { kind: "ROW_ASSET" },
+    feeConvention: { kind: "NET_PLUS_FEE" },
+    directionalFill: { kind: "ONE_SIDED" },
+    columnRoles: { references: [], categoryLabels: ["Type", "Notes"] },
+    // `Notes` is prose — "Tangem Base Reserve" — not an identifier. This is why identity is declared
+    // per source instead of matched on a column name: the same mapped field is an id for Bit2Me.
+    rowIdentity: { kind: "CONTENT_DERIVED" },
+    invariant: { kind: "NONE" },
+  },
+
+  generic: {
+    id: "generic",
+    label: "Unrecognised source",
+    // Declaring no market is what leaves the user's own choice of market standing.
+    market: { kind: "UNDECLARED" },
+    // Reached only by the absence of a match. A signature that matches everything would make every
+    // file ambiguous.
+    signature: { kind: "NOT_DETECTABLE" },
+    // Whatever the user mapped onto the fee currency is the only evidence available; where a
+    // non-zero fee has none, the row is reported rather than given the row's asset by default.
+    feeDenomination: { kind: "NAMED_COLUMN", sourceColumn: "fee_currency" },
+    feeConvention: { kind: "UNDETERMINED" },
+    directionalFill: { kind: "ONE_SIDED" },
+    columnRoles: { references: [], categoryLabels: [] },
+    // An unprofiled file has no identity column anyone has measured, so two identical rows in one are
+    // indistinguishable. Stated, not omitted.
+    rowIdentity: { kind: "CONTENT_DERIVED" },
+    invariant: { kind: "NONE" },
+  },
+};

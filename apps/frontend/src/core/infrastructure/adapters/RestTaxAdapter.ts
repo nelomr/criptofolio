@@ -1,0 +1,375 @@
+/**
+ * RestTaxAdapter — Production HTTP adapter for fiscal/tax data.
+ *
+ * Implements ITaxPort using Hono RPC (hc).
+ *
+ * @see openspec/specs/fiscal-domain/spec.md
+ */
+
+import type {
+  ITaxPort,
+  TransferDestinationInput,
+} from '@/core/domain/ports/ITaxPort'
+import type {
+  TaxTransactionEntity,
+  TaxReportEntity,
+  TaxDerivativeEntity,
+  FiscalIntegrityReportEntity,
+  IngestionOutcomeEntity,
+  OverrideOutcomeEntity,
+  SpotOverrideOutcomeEntity,
+} from '@/core/domain/models/FiscalEntities'
+import type { TransactionIdHash } from '@/core/domain/models/BrandedTypes'
+import {
+  ExternalTaxTransactionSchema,
+  ExternalTaxReportSchema,
+} from '@/core/infrastructure/dtos/ExternalTaxSchemas'
+import {
+  ExternalFiscalIntegritySchema,
+  ExternalIngestionOutcomeSchema,
+  ExternalOverrideOutcomeSchema,
+  ExternalSpotOverrideOutcomeSchema,
+} from '@/core/infrastructure/dtos/FiscalIntegritySchemas'
+import { CexFuturesLedgerSchema } from '@/core/infrastructure/dtos/ExternalFuturesSchemas'
+import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
+import { errorBus } from '@/core/infrastructure/errors/errorBus'
+import { DomainValidationError } from './RestCryptoAdapter'
+import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'
+import { bffClient } from '../http/BffClient'
+import type { SourceProfileId, TransactionRow, SpotTransactionEditInput } from '@criptofolio/shared-types'
+
+/**
+ * Ingestion boundary conversion — `TransactionRow.mappedData` models an unset field as `null` (its
+ * schema is `.nullable()`); the ingestion route models the same absence by omitting the key. Only the
+ * fields the route names explicitly need the fold, one by one — everything else (`metadata`,
+ * `fiscal_flag`, `transfer_group_id`, …) crosses through the route's own `passthrough()` untouched.
+ * `account_id` is rejected rather than sent as `undefined`: a uuid column has no representation for
+ * "unassigned", and the wizard already refuses to submit without one — reaching here without it is a
+ * defect, not a value to guess at.
+ */
+function toIngestionPayloadRow(row: TransactionRow) {
+  const { account_id, ...rest } = row.mappedData
+  if (!account_id) {
+    throw new Error('A row reached ingestion with no account assigned')
+  }
+  return {
+    ...rest,
+    account_id,
+    timestamp: rest.timestamp ?? undefined,
+    tx_type: rest.tx_type ?? undefined,
+    asset_in: rest.asset_in ?? undefined,
+    amount_in: rest.amount_in ?? undefined,
+    asset_out: rest.asset_out ?? undefined,
+    amount_out: rest.amount_out ?? undefined,
+    fee_currency: rest.fee_currency ?? undefined,
+    fee_amount: rest.fee_amount ?? undefined,
+    total_fiat: rest.total_fiat ?? undefined,
+    price_fiat: rest.price_fiat ?? undefined,
+    symbol: rest.symbol ?? undefined,
+    realized_pnl: rest.realized_pnl ?? undefined,
+    funding_amount: rest.funding_amount ?? undefined,
+  }
+}
+
+function emitValidationError(context: string, details: unknown): void {
+  errorBus.emit('validation-error', {
+    message: 'errors.validation.api_malformed_data',
+    context,
+    details,
+  })
+}
+
+function parseOrFail<T>(
+  schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } },
+  rawData: unknown,
+  context: string,
+): T {
+  const result = schema.safeParse(rawData)
+  if (!result.success) {
+    emitValidationError(context, result.error)
+    throw new DomainValidationError(context, result.error)
+  }
+  return result.data!
+}
+
+/**
+ * Parses a list response row by row. A row that fails validation is skipped, never thrown on —
+ * throwing here would turn one malformed row into an empty result, indistinguishable from "no
+ * data", which is the failure mode this exists to prevent. Every rejection is logged to the
+ * console individually for diagnosis; the user-facing `errorBus` notification is aggregated to
+ * one event per call (not one per row), since the actionable fact is "N of M rows were rejected".
+ */
+function collectValidRows<Dto, Entity>(
+  rows: unknown,
+  schema: { safeParse: (data: unknown) => { success: boolean; data?: Dto; error?: unknown } },
+  context: string,
+  toEntity: (dto: Dto) => Entity,
+): Entity[] {
+  const parsed: Entity[] = []
+  let rejectedCount = 0
+  let firstError: unknown
+
+  for (const rawRow of Array.isArray(rows) ? rows : []) {
+    const result = schema.safeParse(rawRow)
+    if (result.success) {
+      parsed.push(toEntity(result.data as Dto))
+    } else {
+      rejectedCount += 1
+      if (firstError === undefined) firstError = result.error
+      console.warn(`[RestTaxAdapter] Skipping invalid row in ${context}:`, result.error, rawRow)
+    }
+  }
+
+  if (rejectedCount > 0) {
+    emitValidationError(context, { rejected: rejectedCount, accepted: parsed.length, error: firstError })
+  }
+
+  return parsed
+}
+
+export class RestTaxAdapter implements ITaxPort {
+  async getSpotTransactions(): Promise<TaxTransactionEntity[]> {
+    const res = await bffClient.api.tax.transactions.spot.$get()
+    const rawArray = await res.json()
+
+    return collectValidRows(rawArray, ExternalTaxTransactionSchema, 'getSpotTransactions', (dto) => ({
+      id: TransactionIdSchema.parse(dto.id),
+      type: dto.type,
+      symbol: dto.symbol,
+      amount: dto.amount,
+      totalEur: dto.totalEur,
+      priceEur: dto.priceEur,
+      feeEur: dto.feeEur,
+      timestamp: dto.timestamp,
+      assetIn: dto.assetIn,
+      assetOut: dto.assetOut,
+      amountIn: dto.amountIn,
+      amountOut: dto.amountOut,
+      exchange: dto.exchange,
+      refId: dto.refId,
+      // Spot-only identity/edit fields (design.md D8/D9) — futures/derivatives never populate
+      // these on the DTO, so `?? undefined` here would be redundant, but they must not be
+      // dropped for spot rows the way a hand-picked literal drops any field it doesn't name.
+      idHash: dto.idHash,
+      fiatCurrency: dto.fiatCurrency,
+      override: dto.override,
+    }))
+  }
+
+  async getFuturesTransactions(): Promise<TaxTransactionEntity[]> {
+    const res = await bffClient.api.tax.transactions.futures.$get()
+    const rawArray = await res.json()
+
+    return collectValidRows(rawArray, ExternalTaxTransactionSchema, 'getFuturesTransactions', (dto) => ({
+      id: TransactionIdSchema.parse(dto.id),
+      type: dto.type,
+      symbol: dto.symbol,
+      amount: dto.amount,
+      totalEur: dto.totalEur,
+      priceEur: dto.priceEur,
+      feeEur: dto.feeEur,
+      timestamp: dto.timestamp,
+      assetIn: dto.assetIn,
+      assetOut: dto.assetOut,
+      amountIn: dto.amountIn,
+      amountOut: dto.amountOut,
+      exchange: dto.exchange,
+      refId: dto.refId,
+    }))
+  }
+
+  async getFuturesDerivatives(): Promise<TaxDerivativeEntity[]> {
+    const res = await bffClient.api.tax.transactions.futures.$get()
+    const rawArray = await res.json()
+
+    return collectValidRows(rawArray, CexFuturesLedgerSchema, 'getFuturesDerivatives', (dto) => dto)
+  }
+
+  async getInvalidTransactions(): Promise<TaxTransactionEntity[]> {
+    const res = await bffClient.api.tax.transactions.invalid.$get()
+    const rawArray = await res.json()
+
+    return collectValidRows(rawArray, ExternalTaxTransactionSchema, 'getInvalidTransactions', (dto) => ({
+      id: TransactionIdSchema.parse(dto.id),
+      type: dto.type,
+      symbol: dto.symbol,
+      amount: dto.amount,
+      totalEur: dto.totalEur,
+      priceEur: dto.priceEur,
+      feeEur: dto.feeEur,
+      timestamp: dto.timestamp,
+    }))
+  }
+
+  async getReport(year: number, method: string): Promise<TaxReportEntity> {
+    const res = await bffClient.api.tax.report.$get({ query: { year: year.toString(), method } })
+    const data = await res.json()
+    const dto = parseOrFail(ExternalTaxReportSchema, data, `getReport(${year})`)
+
+    return {
+      year: dto.year,
+      method: dto.method,
+      currency: dto.currency,
+      conversion: dto.conversion,
+      unconvertibleEvents: dto.unconvertibleEvents,
+      summary: dto.summary,
+      auditTrail: dto.auditTrail as TaxReportEntity['auditTrail'],
+      excludedFlaggedEvents: dto.excludedFlaggedEvents,
+      excludedUnresolvedIncomeCount: dto.excludedUnresolvedIncomeCount,
+    }
+  }
+
+  async getAvailableYears(): Promise<number[]> {
+    // If the backend lacks a dedicated endpoint, we calculate it here in the adapter
+    // to keep the frontend completely pure and dumb.
+    try {
+      const txs = await this.getSpotTransactions()
+      if (txs.length === 0) return [new Date().getFullYear()]
+      return [...new Set(txs.map((tx) => new Date(tx.timestamp).getFullYear()))].sort(
+        (a, b) => b - a,
+      )
+    } catch {
+      return [new Date().getFullYear()]
+    }
+  }
+
+  async validateTransaction(payload: Partial<TaxTransactionEntity>): Promise<void> {
+    await bffClient.api.tax.transactions.validate.$post({ json: payload })
+  }
+
+  async uploadTaxFile(file: File, market: 'spot' | 'futures'): Promise<void> {
+    try {
+      await bffClient.api.tax.upload.$post({ form: { file, market } })
+    } catch (err) {
+      throw new TaxOperationError('UPLOAD_FAILED', `File upload failed: ${(err as Error).message}`)
+    }
+  }
+
+  async importTransactions(rows: TransactionRow[], market: 'spot' | 'futures', timezone: string, sourceProfileId: SourceProfileId): Promise<IngestionOutcomeEntity> {
+    try {
+      const payload = rows.map((row) => toIngestionPayloadRow(row))
+      const res = await bffClient.api.ingestion.transactions.$post({
+        json: { rows: payload, market, timezone, sourceProfileId },
+      });
+      const rawData = await res.json()
+      return parseOrFail(ExternalIngestionOutcomeSchema, rawData, 'importTransactions')
+    } catch (err) {
+      throw new TaxOperationError('IMPORT_FAILED', `Transactions import failed: ${(err as Error).message}`)
+    }
+  }
+
+  async deleteAllTransactions(market: 'spot' | 'futures'): Promise<void> {
+    try {
+      await bffClient.api.tax.transactions.market[':market'].$delete({ param: { market } })
+    } catch (err) {
+      throw new TaxOperationError('DELETE_FAILED', `Bulk delete failed: ${(err as Error).message}`)
+    }
+  }
+
+  async importWallet(chain: string, address: string): Promise<void> {
+    try {
+      await bffClient.api.tax['import-wallet'].$post({ json: { chain, address } })
+    } catch (err) {
+      throw new TaxOperationError('IMPORT_FAILED', `Wallet import failed: ${(err as Error).message}`)
+    }
+  }
+
+  async syncWeb3(): Promise<void> {
+    try {
+      await bffClient.api.tax['sync-web3'].$post({ json: {} })
+    } catch (err) {
+      throw new TaxOperationError('SYNC_FAILED', `Web3 sync failed: ${(err as Error).message}`)
+    }
+  }
+
+  async downloadReport(year: number, format: 'csv'): Promise<Blob> {
+    try {
+      const res = await bffClient.api.tax.report.download.$get({ query: { year: year.toString(), format } })
+      return await res.blob()
+    } catch (err) {
+      throw new TaxOperationError('DOWNLOAD_FAILED', `Report download failed: ${(err as Error).message}`)
+    }
+  }
+
+  async getFiscalIntegrity(accountId?: string): Promise<FiscalIntegrityReportEntity> {
+    const res = await bffClient.api.fiscal.integrity.$get(
+      accountId ? { query: { accountId } } : {},
+    )
+    const rawData = await res.json()
+    return parseOrFail(ExternalFiscalIntegritySchema, rawData, 'getFiscalIntegrity')
+  }
+
+  async setSpotTransactionOverride(
+    idHash: TransactionIdHash,
+    payload: SpotTransactionEditInput,
+  ): Promise<SpotOverrideOutcomeEntity> {
+    const res = await bffClient.api.fiscal.overrides.transactions[':idHash'].$put({
+      param: { idHash },
+      json: payload,
+    })
+    return this.parseSpotOverrideOutcome(res, 'setSpotTransactionOverride')
+  }
+
+  async removeSpotTransactionOverride(idHash: TransactionIdHash): Promise<SpotOverrideOutcomeEntity> {
+    const res = await bffClient.api.fiscal.overrides.transactions[':idHash'].$delete({
+      param: { idHash },
+    })
+    return this.parseSpotOverrideOutcome(res, 'removeSpotTransactionOverride')
+  }
+
+  async setTransferDestinations(
+    overrides: TransferDestinationInput[],
+  ): Promise<OverrideOutcomeEntity> {
+    const res = await bffClient.api.fiscal.overrides.destinations.$put({
+      json: {
+        overrides: overrides.map((override) => ({
+          id_hash: override.idHash,
+          counterparty_account_id: override.counterpartyAccountId,
+          note: override.note,
+        })),
+      },
+    })
+    return this.parseOverrideOutcome(res, 'setTransferDestinations')
+  }
+
+  async removeTransferDestinations(
+    idHashes: TransactionIdHash[],
+  ): Promise<OverrideOutcomeEntity> {
+    const res = await bffClient.api.fiscal.overrides.destinations.$delete({ json: { idHashes } })
+    return this.parseOverrideOutcome(res, 'removeTransferDestinations')
+  }
+
+  /**
+   * A refused declaration is the user's to correct, so the message the backend wrote is carried
+   * through rather than replaced — reporting it as an applied override would be the worse failure.
+   */
+  private async parseOverrideOutcome(
+    res: { ok: boolean; json: () => Promise<unknown> },
+    context: string,
+  ): Promise<OverrideOutcomeEntity> {
+    const rawData = await res.json()
+    if (!res.ok) {
+      const message =
+        typeof rawData === 'object' && rawData !== null && 'message' in rawData
+          ? String((rawData as { message: unknown }).message)
+          : 'Override was rejected'
+      throw new TaxOperationError('OVERRIDE_REJECTED', message)
+    }
+    return parseOrFail(ExternalOverrideOutcomeSchema, rawData, context)
+  }
+
+  private async parseSpotOverrideOutcome(
+    res: { ok: boolean; json: () => Promise<unknown> },
+    context: string,
+  ): Promise<SpotOverrideOutcomeEntity> {
+    const rawData = await res.json()
+    if (!res.ok) {
+      const message =
+        typeof rawData === 'object' && rawData !== null && 'message' in rawData
+          ? String((rawData as { message: unknown }).message)
+          : 'Override was rejected'
+      throw new TaxOperationError('OVERRIDE_REJECTED', message)
+    }
+    return parseOrFail(ExternalSpotOverrideOutcomeSchema, rawData, context)
+  }
+}

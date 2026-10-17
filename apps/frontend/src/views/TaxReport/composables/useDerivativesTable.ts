@@ -1,0 +1,131 @@
+/**
+ * useDerivativesTable — Lógica extraída de TaxDerivativesTable.vue.
+ *
+ * Centraliza: sort, pagination, y helpers de estilo (badge classes, PnL class,
+ * net impact). El componente queda limpio solo con template + bindings.
+ *
+ * @see src/views/TaxReport/components/TaxDerivativesTable.vue
+ * @see src/core/domain/models/FiscalEntities.ts (TaxDerivativeEntity)
+ */
+
+import { computed, ref } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
+import type { Money } from '@criptofolio/core-domain'
+import type { TaxDerivativeEntity, FuturesTransactionType } from '@/core/domain/models/FiscalEntities'
+import { usePagination } from './useTaxCalculations'
+
+// ---------------------------------------------------------------------------
+// Sort
+// ---------------------------------------------------------------------------
+
+export type DerivativesSortKey = 'timestamp' | 'realizedPnl'
+
+export function useDerivativesSort(transactions: Ref<TaxDerivativeEntity[]> | ComputedRef<TaxDerivativeEntity[]>) {
+  const sortKey = ref<DerivativesSortKey>('timestamp')
+  const sortOrder = ref<'asc' | 'desc'>('desc')
+
+  function toggleSort(key: DerivativesSortKey) {
+    if (sortKey.value === key) {
+      sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+    } else {
+      sortKey.value = key
+      sortOrder.value = 'desc'
+    }
+  }
+
+  const sorted = computed(() => {
+    const items = [...transactions.value]
+    return items.sort((a, b) => {
+      if (sortKey.value === 'timestamp') {
+        const cmp = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        return sortOrder.value === 'asc' ? cmp : -cmp
+      }
+      // Unresolved sorts last in both directions: an unresolved PnL is not "smaller" than a loss.
+      if (a.realizedPnl === null && b.realizedPnl === null) return 0
+      if (a.realizedPnl === null) return 1
+      if (b.realizedPnl === null) return -1
+      const cmp = a.realizedPnl.compareTo(b.realizedPnl)
+      return sortOrder.value === 'asc' ? cmp : -cmp
+    })
+  })
+
+  return { sortKey, sortOrder, toggleSort, sorted }
+}
+
+// ---------------------------------------------------------------------------
+// Pagination (delegates to the shared usePagination)
+// ---------------------------------------------------------------------------
+
+export function useDerivativesPagination(
+  sorted: ComputedRef<TaxDerivativeEntity[]>,
+  pageSize = 20,
+) {
+  const pagination = usePagination(sorted, pageSize)
+  // usePagination returns paginatedData typed as ComputedRef<unknown[]> —
+  // we narrow it here so the component doesn't need the ugly cast.
+  const paginatedTxs = pagination.paginatedData as unknown as ComputedRef<TaxDerivativeEntity[]>
+  return { ...pagination, paginatedTxs }
+}
+
+// ---------------------------------------------------------------------------
+// Style helpers — keep pure functions here, not inlined in the template
+// ---------------------------------------------------------------------------
+
+/** CSS classes for the transaction type badge */
+export function getTypeBadgeClass(type: FuturesTransactionType): string {
+  switch (type) {
+    case 'FUTURES_TRADE':
+      return 'bg-primary/10 text-primary border-none'
+    case 'FUTURES_FUNDING':
+      return 'bg-warning-soft text-warning border-none'
+    case 'FUTURES_SETTLEMENT':
+      return 'bg-info-soft text-info border-none'
+    case 'FUTURES_LIQUIDATION':
+      return 'bg-loss-soft text-loss border-none'
+    default:
+      return 'bg-background text-muted-foreground border-none'
+  }
+}
+
+/** CSS classes for the PnL cell (AEAT taxable event highlight) */
+export function getPnlClass(pnl: Money | null): string {
+  if (pnl === null) return 'text-muted-foreground font-mono'
+  if (pnl.isPositive()) return 'text-profit font-bold font-mono'
+  if (pnl.isNegative()) return 'text-loss font-bold font-mono'
+  return 'text-muted-foreground font-mono'
+}
+
+/** CSS classes for the status badge */
+export function getStatusBadgeClass(status: string | undefined): string {
+  const s = (status ?? '').toUpperCase()
+  if (s === 'CLOSED' || s === 'SETTLED')
+    return 'bg-background text-muted-foreground border border-border/40'
+  if (s === 'OPEN') return 'bg-profit/10 text-profit border border-profit/20'
+  return 'bg-background text-muted-foreground border border-border/40'
+}
+
+/** Net cost impact of fees and funding on a position (signed). `null` if either operand is unresolved — summing only the resolved component would be `?? 0` under another name. */
+export function getNetImpact(tx: TaxDerivativeEntity): Money | null {
+  if (tx.fees === null || tx.funding === null) return null
+  return tx.funding.sub(tx.fees)
+}
+
+/** Formats raw contract symbols (e.g., pf_ethusd) into readable names (e.g., ETH/USD Perp) */
+export function formatContractName(contractSymbol: string): string {
+  if (!contractSymbol) return '---'
+  const lower = contractSymbol.toLowerCase()
+
+  // Kraken formats: pf_ethusd, pi_btcusd, ff_sol_usd, fi_ada_usd
+  const krakenMatch = lower.match(/^(pf|pi|ff|fi)_([a-z0-9]+?)(?:_)?(usd|eur|gbp|usdt|usdc)$/)
+  if (krakenMatch) {
+    const [, prefix, asset, quote] = krakenMatch
+    let suffix = 'Perp'
+    if (prefix === 'pi') suffix = 'Inverse'
+    else if (prefix === 'ff') suffix = 'Fixed'
+    else if (prefix === 'fi') suffix = 'Fixed Inv'
+
+    return `${asset.toUpperCase()}/${quote.toUpperCase()} ${suffix}`
+  }
+
+  return contractSymbol.toUpperCase()
+}

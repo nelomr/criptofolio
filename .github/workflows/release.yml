@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types:
+      - completed
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: write # Needed to push version bump commits and tags
+      pull-requests: write # Not strictly needed if not creating PRs
+      id-token: write # Needed for provenance if publishing to NPM
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Git User
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Version and Publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCS_REPO_TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
+        run: |
+          # Use npx to ensure the binary is resolved correctly
+          npx changeset version
+
+          # Sync newly generated package changelogs into the root CHANGELOG.md
+          node scripts/sync-root-changelog.mjs
+
+          # Check if there are any changes (version bumps happened)
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "Changes detected, committing version bumps..."
+            git add .
+            # --no-verify: the CI workflow that triggered this release already ran typecheck/lint/test
+            # against this exact tree. Re-running the full suite via the pre-commit hook here is
+            # redundant and previously added ~3 minutes between checkout and push — a window in which
+            # another commit (a merged PR, a Dependabot auto-merge) can land on main and turn the
+            # eventual push into a non-fast-forward rejection.
+            git commit --no-verify -m "chore(release): version packages [skip ci]"
+
+            # Since 'Frontend is King', we use its version as the global release tag
+            FRONTEND_VERSION=$(node -p "require('./apps/frontend/package.json').version")
+            GLOBAL_TAG="v$FRONTEND_VERSION"
+
+            # main can still move during install/version even without the hook's delay, so retry the
+            # push against a rebased HEAD instead of failing outright on a non-fast-forward rejection.
+            for attempt in 1 2 3 4 5; do
+              # Package-scoped tags (e.g. @criptofolio/frontend@1.15.11) reference the current commit,
+              # so any created by a prior failed attempt must be dropped before rebasing — recreated
+              # fresh against the rebased commit each time.
+              existing_tags=$(git tag -l)
+              if [[ -n "$existing_tags" ]]; then
+                echo "$existing_tags" | xargs git tag -d
+              fi
+              npx changeset tag
+
+              # --atomic: the branch update and the tag updates succeed or fail together, so a
+              # rejection never leaves a tag stranded on origin pointing at a commit this retry loop
+              # is about to abandon via rebase.
+              if git push --atomic origin main --tags; then
+                break
+              fi
+
+              if [[ $attempt -eq 5 ]]; then
+                echo "::error::Failed to push release after 5 attempts"
+                exit 1
+              fi
+
+              echo "Push rejected (attempt $attempt) — main moved, rebasing and retrying..."
+              git fetch origin main
+              git rebase origin/main
+            done
+
+            # Create a GitHub Release attached to the global tag if it doesn't exist yet
+            if ! gh release view "$GLOBAL_TAG" >/dev/null 2>&1; then
+              gh release create "$GLOBAL_TAG" \
+                --target main \
+                --title "v$FRONTEND_VERSION" \
+                --generate-notes \
+                --latest
+              echo "✅ GitHub Release $GLOBAL_TAG successfully created!"
+            else
+              echo "⚠️ GitHub Release $GLOBAL_TAG already exists, skipping release creation."
+            fi
+
+            # Align the docs repository with this release: bump the version its site header
+            # displays, then tag that commit so the matching documentation stays addressable.
+            # GITHUB_TOKEN is scoped to this repository only, so a separate token with
+            # contents:write on the docs repo is required. A failure here must not fail a release
+            # that is already published.
+            if [[ -z "$DOCS_REPO_TOKEN" ]]; then
+              echo "::warning::DOCS_REPO_TOKEN is not set, skipping docs alignment for $GLOBAL_TAG."
+            else
+              export GH_TOKEN="$DOCS_REPO_TOKEN"
+              DOCS_REPO="nelomr/criptofolio-documents"
+              if gh api "repos/$DOCS_REPO/git/ref/tags/$GLOBAL_TAG" >/dev/null 2>&1; then
+                echo "Docs tag $GLOBAL_TAG already exists, skipping."
+              else
+                DOCS_PKG=$(gh api "repos/$DOCS_REPO/contents/package.json?ref=main" || true)
+                DOCS_PKG_SHA=$(jq -r '.sha // empty' <<<"$DOCS_PKG")
+                DOCS_JSON=$(jq -r '.content // empty' <<<"$DOCS_PKG" | base64 -d)
+                DOCS_TARGET_SHA=""
+                if [[ -z "$DOCS_PKG_SHA" || -z "$DOCS_JSON" ]]; then
+                  echo "::warning::Cannot read docs package.json, skipping docs alignment for $GLOBAL_TAG."
+                elif [[ "$(jq -r .version <<<"$DOCS_JSON")" == "$FRONTEND_VERSION" ]]; then
+                  DOCS_TARGET_SHA=$(gh api "repos/$DOCS_REPO/commits/main" --jq .sha || true)
+                else
+                  DOCS_NEW_CONTENT=$(jq --arg v "$FRONTEND_VERSION" '.version = $v' <<<"$DOCS_JSON" | base64 -w0)
+                  DOCS_TARGET_SHA=$(gh api -X PUT "repos/$DOCS_REPO/contents/package.json" \
+                    -f message="chore(release): align docs with v$FRONTEND_VERSION" \
+                    -f content="$DOCS_NEW_CONTENT" -f sha="$DOCS_PKG_SHA" -f branch=main \
+                    --jq .commit.sha || true)
+                fi
+                if [[ -n "$DOCS_TARGET_SHA" ]] && gh api "repos/$DOCS_REPO/git/refs" \
+                  -f ref="refs/tags/$GLOBAL_TAG" -f sha="$DOCS_TARGET_SHA" >/dev/null; then
+                  echo "✅ Docs aligned and tagged $GLOBAL_TAG in $DOCS_REPO"
+                else
+                  echo "::warning::Could not align docs repository with $GLOBAL_TAG."
+                fi
+              fi
+            fi
+          else
+            echo "No changesets found, nothing to version or publish."
+          fi

@@ -1,0 +1,238 @@
+# Lot Custody Traceability Specification
+
+## Purpose
+
+Custody as a balanced double-entry ledger: the synthetic `ownwallet-<ASSET>` counterparty, signed diagnostic residuals, and the rule that a lot is never split, re-dated or relocated.
+## Requirements
+### Requirement: Every Custody Movement Produces Balanced Double-Entry Records
+
+Every crypto `WITHDRAWAL`, `TRANSFER_OUT`, `DEPOSIT`, and `TRANSFER_IN` SHALL produce balanced custody entries: one debit on the source account and one credit on the destination account, for the same asset and quantity. Custody tracking SHALL NOT depend on a time window, an amount-matching tolerance, or any pairing heuristic.
+
+#### Scenario: Outbound movement debits source and credits destination
+
+- **WHEN** 179.11 XRP leaves `Kraken:spot` via a `WITHDRAWAL`
+- **THEN** a custody entry of `-179.11` MUST be recorded against `Kraken:spot`
+- **AND** a custody entry of `+179.11` MUST be recorded against the resolved destination account
+- **AND** the two entries MUST sum to zero for that asset
+
+#### Scenario: Inbound movement debits source and credits destination
+
+- **WHEN** 178.91 XRP arrives at `Ledger` via a `DEPOSIT`
+- **THEN** a custody entry of `-178.91` MUST be recorded against the resolved source account
+- **AND** a custody entry of `+178.91` MUST be recorded against `Ledger`
+
+#### Scenario: Custody derivation is order-independent and idempotent
+
+- **WHEN** the same set of transactions is processed in a different order
+- **THEN** the resulting custody balances MUST be identical
+- **AND** re-running materialisation over an unchanged ledger MUST produce byte-identical custody entries
+
+#### Scenario: No time or amount heuristic appears in the implementation
+
+- **WHEN** the custody views and adapters are inspected
+- **THEN** they MUST NOT contain a time-window predicate, an amount-tolerance band, or a nearest-in-time tie-break used to associate two transaction legs
+- **AND** custody attribution MUST derive solely from per-account balances
+
+### Requirement: Synthetic `ownwallet-<ASSET>` Default Counterparty
+
+When a custody movement's counterparty account cannot be determined, the system SHALL resolve it to a synthetic per-asset account named `ownwallet-<ASSET>`, created on demand and flagged `is_synthetic`. This account SHALL act as both sink and source, and SHALL accumulate lots that continue to follow the same allocation logic as any real account.
+
+#### Scenario: Unknown destination resolves to the synthetic account
+
+- **WHEN** a `WITHDRAWAL` of XRP has no recorded destination and no user override
+- **THEN** the credit entry MUST target the account `ownwallet-XRP`
+- **AND** that account MUST be created on demand with `is_synthetic = 1`
+
+#### Scenario: Unknown source draws from the synthetic account
+
+- **WHEN** a `DEPOSIT` of XRP has no recorded source and no user override
+- **THEN** the debit entry MUST target `ownwallet-XRP`
+
+#### Scenario: Lots accumulate in the synthetic account and remain traceable
+
+- **WHEN** three separate withdrawals of XRP occur with no known destinations
+- **THEN** `ownwallet-XRP` MUST hold the combined quantity
+- **AND** each contributing lot MUST remain individually identifiable with its original acquisition date and unit cost
+
+#### Scenario: Self-custody spanning years is representable
+
+- **WHEN** an asset is withdrawn to an unknown destination and no matching deposit occurs for three years
+- **THEN** the quantity MUST remain attributed to `ownwallet-<ASSET>` for the entire period
+- **AND** the originating lot MUST remain `OPEN` with its original cost basis
+- **AND** no expiry, timeout, or reconciliation failure MUST occur
+
+#### Scenario: Synthetic accounts are excluded from user-facing selectors
+
+- **WHEN** the account list is presented for CSV import or filtering
+- **THEN** accounts with `is_synthetic = 1` MUST NOT appear
+- **AND** they MUST still participate fully in custody arithmetic
+
+### Requirement: Residual Balances Are Diagnostic and Signed
+
+The balance of each `ownwallet-<ASSET>` account SHALL be treated as a diagnostic signal whose sign carries distinct meaning, and SHALL be surfaced rather than absorbed.
+
+#### Scenario: Positive residual beyond fee scale is flagged
+
+- **WHEN** the `ownwallet-XRP` balance is positive and exceeds the tolerance derived from the asset's recorded fee scale
+- **THEN** it MUST be reported with flag `CUSTODY_RESIDUAL` at low severity
+- **AND** the report MUST state the residual quantity and the asset
+
+#### Scenario: Residual within fee scale is not flagged
+
+- **WHEN** the residual equals the accumulated unrecorded network fees within tolerance
+- **THEN** no flag MUST be raised
+
+#### Scenario: Negative balance indicates an untracked inflow
+
+- **WHEN** the `ownwallet-XRP` balance is negative, meaning more XRP arrived than ever left known accounts
+- **THEN** it MUST be reported with flag `UNTRACKED_INFLOW` at high severity
+- **AND** the report MUST state that a holding exists with no established cost basis
+
+#### Scenario: Tolerance scales with the asset
+
+- **WHEN** the tolerance is evaluated for an asset whose unit value differs by orders of magnitude from another
+- **THEN** it MUST be expressed relative to that asset's recorded fees, not as a shared absolute constant
+
+### Requirement: Lots Are Never Split, Re-dated, or Relocated
+
+A lot SHALL remain exactly one row per acquisition. Custody movements SHALL NOT create new lot rows, SHALL NOT alter `original_qty`, `remaining_qty`, `unit_cost_fiat`, `total_cost_fiat`, or `acquisition_timestamp`, and SHALL NOT change `exchange_location`, which denotes the acquiring venue.
+
+#### Scenario: Partial movement distributes custody without splitting the lot
+
+- **WHEN** 100 of a 179.11 XRP lot are moved to another account
+- **THEN** the lot MUST remain a single row with `original_qty = 179.11`
+- **AND** custody MUST show 100 in the destination and 79.11 in the source
+- **AND** no second lot row MUST be created
+
+#### Scenario: Acquisition date and cost survive relocation
+
+- **WHEN** a lot acquired on `Kraken:spot` at `1.6724 €/XRP` on 2025-12-15 is moved twice
+- **THEN** `unit_cost_fiat` MUST remain `1.6724`
+- **AND** `acquisition_timestamp` MUST remain 2025-12-15
+- **AND** `exchange_location` MUST remain `Kraken:spot`
+
+#### Scenario: Movement does not consume the lot
+
+- **WHEN** a lot's entire quantity is moved to another account
+- **THEN** its `remaining_qty` MUST be unchanged
+- **AND** its `status` MUST remain `OPEN`
+- **AND** no `lot_history_event` MUST be produced
+
+#### Scenario: Holding period is measured from acquisition
+
+- **WHEN** an asset is bought, moved across two accounts, and later sold
+- **THEN** the resulting disposal MUST compute the holding period from the original acquisition date, not from any movement date
+
+### Requirement: Custody Allocation FIFO Is Independent of Taxation FIFO
+
+The system SHALL maintain two distinct orderings: taxation FIFO, global per asset, determining which lot a disposal consumes; and custody allocation FIFO, scoped per `(account, asset)`, determining which lot's quantity moves. Custody allocation SHALL have no fiscal effect.
+
+#### Scenario: Custody allocation draws from the oldest lot held in that account
+
+- **WHEN** 100 XRP leave `Kraken:spot`, which custodies a 2025-12-15 lot and a 2026-01-25 lot
+- **THEN** the moved quantity MUST be drawn from the 2025-12-15 lot first
+
+#### Scenario: Taxation FIFO remains global and unaffected
+
+- **WHEN** BTC is bought on `Kraken:spot`, moved to `Binance`, and sold on `Binance`
+- **THEN** the disposal MUST consume the globally oldest BTC lot at its original cost basis
+- **AND** the matching MUST NOT be partitioned by account
+
+#### Scenario: Custody allocation emits no fiscal records
+
+- **WHEN** custody allocation runs
+- **THEN** it MUST NOT emit any `lot_history_event`
+- **AND** it MUST NOT modify any lot's `remaining_qty` or `status`
+- **AND** it MUST NOT alter the taxation FIFO queue order
+
+#### Scenario: Allocation is computed in the analytical engine
+
+- **WHEN** custody allocation is implemented
+- **THEN** the sequential allocation MUST be performed in DuckDB using a recursive CTE
+- **AND** it MUST NOT be implemented as a row-by-row loop in the application layer
+
+### Requirement: Current Custody Location View
+
+The system SHALL expose a view resolving, for each lot, the account currently holding each portion of its quantity, and a view exposing per-account custody balances per asset. The custody relations SHALL remain views and SHALL NOT be materialised as tables. The query that builds the holdings snapshot's `portfolioLocations` SHALL apply a deterministic total ordering, so the same materialised state always yields the same array order. That ordering is a **presentation** ordering only: it SHALL be applied in the presentation query and SHALL NEVER enter a FIFO relation or reorder the global per-asset taxation queue.
+
+#### Scenario: Resolving current holder after two hops
+
+- **WHEN** a lot moves `Kraken:spot` → `ownwallet-XRP` → `Ledger`
+- **THEN** the custody view MUST report `Ledger` as the current holder of the moved quantity
+- **AND** `tax_lots.exchange_location` MUST continue to report `Kraken:spot`
+
+#### Scenario: Custody totals reconcile with account balances
+
+- **WHEN** custody is aggregated by account and asset
+- **THEN** the totals MUST equal each account's on-ledger balance for that asset within the configured precision tolerance
+- **AND** a mismatch MUST be reported with flag `CUSTODY_IMBALANCE`
+
+#### Scenario: Sub-wallet custody is distinguishable
+
+- **WHEN** XRP is moved from `Kraken:spot` to `Kraken:earn` for staking
+- **THEN** the custody view MUST report the quantity under `Kraken:earn`
+- **AND** the free balance under `Kraken:spot` MUST be reduced accordingly
+- **AND** roll-up to the parent `Kraken` account MUST show the unchanged total
+
+#### Scenario: `portfolioLocations` order is stable across calls
+
+- **WHEN** `getHoldingsSnapshot()` is called twice over the same materialised state, with no ledger mutation in between
+- **THEN** each holding's `portfolioLocations` array MUST be returned in an identical order
+- **AND** the ordering MUST come from an explicit `ORDER BY` over a total, non-null key, not from the relation's incidental emission order
+
+#### Scenario: Custody relations stay views
+
+- **WHEN** the analytical catalogue is inspected after a derived-chain rebuild
+- **THEN** the custody relations MUST still be views over the ledger and the derived chain
+- **AND** no `m_` table MUST exist for a custody relation
+
+#### Scenario: The presentation ordering never reaches the tax queue
+
+- **WHEN** the deterministic `portfolioLocations` ordering is applied
+- **THEN** it MUST appear only in the holdings-snapshot presentation query
+- **AND** the taxation FIFO MUST remain `PARTITION BY asset_id ORDER BY timestamp, tx_id`, unpartitioned by account and byte-identical to its prior definition
+
+### Requirement: Lot, Disposal and Relocation Quantities Cross the Wire As Exact Decimals
+
+The token-history response — the surface through which this capability's lots, disposal events and custody relocations reach a client — SHALL carry every quantity and every cost figure as an exact decimal string, never as a JSON number. `GetTokenHistoryUseCase`'s wire DTOs SHALL declare `original_qty`, `remaining_qty`, `unit_cost` and `total_cost` on the lot, `amount_from_lot` on the disposal event, `qty` on the relocation, and `qty` on the custody entry as string carriers, and the use case SHALL emit each of them by passing the source value through unchanged.
+
+Every one of those seven sources is already exact: the four lot figures are `PreciseAmount` on `ILedgerPort`'s tax-lot row, and `amount_from_lot`, the relocation `qty` and the custody `qty` are `string` on `ITaxCalculatorPort`'s converted-disposal, relocation and custody-location rows. The `Number(...)` wrapper applied to them is therefore gratuitous destruction of precision, not a conversion any consumer needs. The correction SHALL be the deletion of that wrapper and the widening of the declared field type; it SHALL NOT introduce any parsing, formatting, or reconstruction of a value from a float.
+
+Where the brand already exists at the source it SHALL be carried, and where it does not it SHALL NOT be manufactured: the four lot fields SHALL be declared `PreciseAmount`, and the three fields arriving as plain `string` SHALL be declared `string`, rather than re-validating a value the analytical view already produced.
+
+#### Scenario: The seven token-history figures are strings on the wire
+
+- **WHEN** the token-history response DTO types are inspected
+- **THEN** `original_qty`, `remaining_qty`, `unit_cost` and `total_cost` SHALL be `PreciseAmount`
+- **AND** `amount_from_lot`, the relocation `qty` and the custody `qty` SHALL be `string`
+- **AND** none of the seven SHALL be typed `number`
+- **AND** no `Number(...)`, `parseFloat(...)` or unary `+` SHALL be applied to any of them on the emitting path.
+
+#### Scenario: A figure with more significant digits than a double preserves reaches the client intact
+
+- **WHEN** a tax lot's `unit_cost_fiat` is the exact decimal `0.000000010000000001` and the token history is requested
+- **THEN** the emitted `unit_cost` SHALL be that same string, digit for digit
+- **AND** it SHALL NOT be the nearest IEEE-754 double's decimal expansion
+- **AND** the source's own formatting SHALL survive the passthrough, so a stored `500.00` SHALL be emitted as `"500.00"` rather than normalised.
+
+#### Scenario: The zero-quantity custody filter compares exactly
+
+- **WHEN** the custody rows are grouped by lot and a row whose net holding is zero must be excluded, because an account holding none of a lot is not a location
+- **THEN** the predicate SHALL be an exact decimal comparison of the row's `qty` against `'0'`, via `compareDecimalStrings`
+- **AND** it SHALL NOT be `Number(row.qty) === 0`, which underflows a real, tiny holding such as `1e-400` to zero and would filter it out of existence
+- **AND** a custody row of quantity `0.000000000000000000001` SHALL be retained as a location
+- **AND** a custody row of quantity `0` SHALL still be excluded.
+
+#### Scenario: No other quantity predicate is introduced or left behind
+
+- **WHEN** the token-history use case is inspected after the change
+- **THEN** the custody zero filter SHALL be the only place a quantity governs whether a row is emitted
+- **AND** lots and disposal events SHALL remain unfiltered by quantity, the remaining predicates in that file being identifier-presence and set-membership checks
+- **AND** no `Number(...)` on a monetary or quantity value SHALL remain anywhere in the file, including inside a boolean-only use, so that a future reader cannot mistake a confined float use for the defect this requirement removes.
+
+#### Scenario: The shape change needs no coordinated client release
+
+- **WHEN** the widened response is parsed by the existing frontend DTO layer, whose numeric field helper already accepts either a JSON number or a numeric string
+- **THEN** the parse SHALL succeed and produce the same entities it produced before the change
+- **AND** the emitter change SHALL therefore be landable on its own, ahead of any client change, with no breakage window.
+

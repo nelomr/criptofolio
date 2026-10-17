@@ -1,0 +1,245 @@
+import { describe, it, expect } from 'vitest'
+import { ref, shallowRef } from 'vue'
+import { Money } from '@criptofolio/core-domain'
+import {
+  useSmartYearLogic,
+  usePagination,
+  getEventVariant,
+  gainLossClass,
+  BADGE_CLASSES,
+  BADGE_I18N_KEYS,
+} from '@/views/TaxReport/composables/useTaxCalculations'
+import type { TaxTransactionEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
+import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
+
+const dummyTx = (year: number): TaxTransactionEntity => ({
+  id: TransactionIdSchema.parse(`tx-${Math.random()}`),
+  type: 'BUY',
+  symbol: 'BTC',
+  amount: new Money('1'),
+  totalEur: new Money('1000'),
+  priceEur: new Money('1000'),
+  feeEur: new Money('0'),
+  timestamp: new Date(`${year}-06-15T10:00:00Z`),
+})
+
+// ---------------------------------------------------------------------------
+// Helpers to build minimal TaxLotHistoryEvent fixtures
+// ---------------------------------------------------------------------------
+
+const lotEvent = (overrides: Partial<TaxLotHistoryEvent> = {}): TaxLotHistoryEvent => ({
+  id: `lot-${Math.random()}`,
+  disposalDate: new Date('2025-01-01'),
+  amountFromLot: new Money('1'),
+  salePrice: { kind: 'NATIVE', amount: '100', currency: 'EUR' },
+  gainLoss: { kind: 'NATIVE', amount: '50', currency: 'EUR' },
+  saleFeeEur: null,
+  isTaxable: true,
+  disposalType: 'SELL',
+  ...overrides,
+})
+
+describe('Tax Calculations Composables', () => {
+  describe('useSmartYearLogic', () => {
+    it('returns current year if no transactions exist', () => {
+      const txs = shallowRef<TaxTransactionEntity[]>([])
+      const { smartYear } = useSmartYearLogic(txs)
+      expect(smartYear.value).toBe(new Date().getFullYear())
+    })
+
+    it('returns the year with the most transactions', () => {
+      const txs = shallowRef<TaxTransactionEntity[]>([
+        dummyTx(2023),
+        dummyTx(2024),
+        dummyTx(2024),
+        dummyTx(2024),
+        dummyTx(2025),
+        dummyTx(2025),
+      ])
+      const { smartYear } = useSmartYearLogic(txs)
+      expect(smartYear.value).toBe(2024)
+    })
+
+    it('returns the most recent year if there is a tie', () => {
+      const txs = shallowRef<TaxTransactionEntity[]>([
+        dummyTx(2024),
+        dummyTx(2024),
+        dummyTx(2025),
+        dummyTx(2025),
+      ])
+      const { smartYear } = useSmartYearLogic(txs)
+      expect(smartYear.value).toBe(2025)
+    })
+  })
+
+  describe('usePagination', () => {
+    it('paginates data correctly', () => {
+      const data = ref([1, 2, 3, 4, 5])
+      const { paginatedData, totalPages, totalItems } = usePagination(data, 2)
+      
+      expect(totalItems.value).toBe(5)
+      expect(totalPages.value).toBe(3)
+      expect(paginatedData.value).toEqual([1, 2]) // Page 1
+    })
+
+    it('can navigate pages', () => {
+      const data = ref([1, 2, 3, 4, 5])
+      const { paginatedData, currentPage, nextPage, prevPage, goToPage } = usePagination(data, 2)
+      
+      expect(currentPage.value).toBe(1)
+      
+      nextPage()
+      expect(currentPage.value).toBe(2)
+      expect(paginatedData.value).toEqual([3, 4])
+      
+      goToPage(3)
+      expect(currentPage.value).toBe(3)
+      expect(paginatedData.value).toEqual([5])
+      
+      prevPage()
+      expect(currentPage.value).toBe(2)
+      
+      // Prevent out of bounds
+      nextPage()
+      nextPage()
+      nextPage()
+      expect(currentPage.value).toBe(3)
+    })
+
+    it('calculates display ranges correctly', () => {
+      const data = ref([1, 2, 3, 4, 5])
+      const { rangeStart, rangeEnd, nextPage } = usePagination(data, 2)
+      
+      expect(rangeStart.value).toBe(1)
+      expect(rangeEnd.value).toBe(2)
+      
+      nextPage()
+      expect(rangeStart.value).toBe(3)
+      expect(rangeEnd.value).toBe(4)
+      
+      nextPage()
+      expect(rangeStart.value).toBe(5)
+      expect(rangeEnd.value).toBe(5)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Audit trail badge helpers
+  // ---------------------------------------------------------------------------
+
+  describe('getEventVariant', () => {
+    it('returns "activation" for WALLET_ACTIVATION flag — highest priority', () => {
+      const event = lotEvent({ flag: 'WALLET_ACTIVATION', isTaxable: false, gainLoss: { kind: 'NATIVE', amount: '0', currency: 'EUR' } })
+      expect(getEventVariant(event)).toBe('activation')
+    })
+
+    it('returns "exempt" for non-taxable events without WALLET_ACTIVATION flag', () => {
+      const event = lotEvent({ isTaxable: false, gainLoss: { kind: 'NATIVE', amount: '0', currency: 'EUR' } })
+      expect(getEventVariant(event)).toBe('exempt')
+    })
+
+
+    it('returns "unconverted" for a figure no rate could express, never "gain"', () => {
+      // The fourth state. `UNCONVERTIBLE` carries a native amount that is usually positive, so a
+      // variant function that only knows three states falls through to the `>= 0` branch and paints
+      // a failed conversion as a profit — the same shape as the `null >= 0` bug this project shipped.
+      const event = lotEvent({
+        isTaxable: true,
+        gainLoss: {
+          kind: 'UNCONVERTIBLE',
+          nativeAmount: '200',
+          nativeCurrency: 'USD',
+          requested: 'EUR',
+        },
+      })
+      expect(getEventVariant(event)).toBe('unconverted')
+    })
+
+    it('keeps unresolved and unconverted apart', () => {
+      // Different causes, different remedies: no price was ever computed versus no rate reached the
+      // date. Collapsing them sends the user to fetch a rate when what is missing is a valuation.
+      expect(getEventVariant(lotEvent({ isTaxable: true, gainLoss: null }))).toBe('unresolved')
+      expect(
+        getEventVariant(
+          lotEvent({
+            isTaxable: true,
+            gainLoss: {
+              kind: 'UNCONVERTIBLE',
+              nativeAmount: '0',
+              nativeCurrency: 'USD',
+              requested: 'EUR',
+            },
+          }),
+        ),
+      ).toBe('unconverted')
+    })
+
+    it('has a badge class and an i18n key for every variant it can return', () => {
+      // A variant with no entry renders as an unstyled, unlabelled badge — visible only by eye.
+      for (const variant of ['gain', 'loss', 'exempt', 'activation', 'unresolved', 'unconverted'] as const) {
+        expect(BADGE_CLASSES[variant], `no badge class for ${variant}`).toBeTruthy()
+        expect(BADGE_I18N_KEYS[variant], `no i18n key for ${variant}`).toBeTruthy()
+      }
+    })
+
+    it('returns "gain" for taxable events with a positive gain', () => {
+      const event = lotEvent({ isTaxable: true, gainLoss: { kind: 'NATIVE', amount: '200', currency: 'EUR' } })
+      expect(getEventVariant(event)).toBe('gain')
+    })
+
+    it('returns "gain" for taxable events with a zero gain (break-even)', () => {
+      const event = lotEvent({ isTaxable: true, gainLoss: { kind: 'NATIVE', amount: '0', currency: 'EUR' } })
+      expect(getEventVariant(event)).toBe('gain')
+    })
+
+    it('returns "loss" for taxable events with a negative gain', () => {
+      const event = lotEvent({ isTaxable: true, gainLoss: { kind: 'NATIVE', amount: '-50', currency: 'EUR' } })
+      expect(getEventVariant(event)).toBe('loss')
+    })
+
+    it('classifies a tiny negative gain as a loss even where Number() underflows it to zero', () => {
+      // Number('-0.000...(400 zeros)...1') underflows to -0, and -0 >= 0 is true in JavaScript, so
+      // the float path misclassifies a real (if minuscule) loss as a gain.
+      const tinyLoss = `-0.${'0'.repeat(400)}1`
+      expect(Number(tinyLoss)).toBe(-0)
+      const event = lotEvent({
+        isTaxable: true,
+        gainLoss: { kind: 'NATIVE', amount: tinyLoss, currency: 'EUR' },
+      })
+      expect(getEventVariant(event)).toBe('loss')
+    })
+  })
+
+  describe('gainLossClass', () => {
+    it('returns emerald class for positive values', () => {
+      expect(gainLossClass(100)).toContain('text-profit')
+    })
+
+    it('returns rose class for negative values', () => {
+      expect(gainLossClass(-0.01)).toContain('text-loss')
+    })
+
+    it('returns muted class for zero', () => {
+      expect(gainLossClass(0)).toBe('text-muted-foreground')
+    })
+  })
+
+  describe('BADGE_CLASSES', () => {
+    it('defines a class string for every variant', () => {
+      const variants = ['gain', 'loss', 'exempt', 'activation'] as const
+      for (const v of variants) {
+        expect(typeof BADGE_CLASSES[v]).toBe('string')
+        expect(BADGE_CLASSES[v].length).toBeGreaterThan(0)
+      }
+    })
+  })
+
+  describe('BADGE_I18N_KEYS', () => {
+    it('defines an i18n key for every variant that starts with "tax.audit."', () => {
+      const variants = ['gain', 'loss', 'exempt', 'activation'] as const
+      for (const v of variants) {
+        expect(BADGE_I18N_KEYS[v]).toMatch(/^tax\.audit\./)
+      }
+    })
+  })
+})

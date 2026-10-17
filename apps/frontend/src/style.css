@@ -1,0 +1,93 @@
+@layer theme, base, components, vendor, utilities;
+@import "tailwindcss";
+@import "vue-sonner/style.css" layer(vendor);
+@import "./styles/theme.css";
+@import "./styles/responsive-fixes.css";
+
+@theme inline {
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #fafbfc;
+  --color-surface-3: #f4f6f8;
+  
+  --color-fg: #0a0f1c;
+  --color-fg-2: #1f2937;
+  --color-muted: #6b7280;
+  --color-muted-2: #9ca3af;
+  --color-ring: rgba(30, 58, 138, 0.5);
+  
+  --color-border: #e5e7eb;
+  --color-border-soft: rgba(10, 14, 26, 0.06);
+  --color-border-medium: rgba(10, 14, 26, 0.10);
+
+  --color-brand: #1e3a8a;
+  --color-brand-hover: #1d4ed8;
+  --color-brand-soft: rgba(30, 58, 138, 0.08);
+  --color-brand-medium: rgba(30, 58, 138, 0.14);
+  
+  --color-profit: #00875a;
+  --color-profit-soft: rgba(0, 135, 90, 0.10);
+  --color-profit-medium: rgba(0, 135, 90, 0.18);
+  
+  --color-loss: #d14343;
+  --color-loss-soft: rgba(209, 67, 67, 0.10);
+  --color-loss-medium: rgba(209, 67, 67, 0.18);
+
+  --color-warning: #b45309;
+  --color-warning-soft: rgba(180, 83, 9, 0.10);
+  
+  --color-info: #1d4ed8;
+  --color-info-soft: rgba(29, 78, 216, 0.08);
+
+  /* Shadcn mappings */
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-fg);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-fg);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-fg);
+  --color-primary: var(--color-fg);
+  --color-primary-foreground: var(--color-bg);
+  --color-secondary: var(--color-surface-2);
+  --color-secondary-foreground: var(--color-fg);
+  --color-muted-foreground: var(--color-muted);
+  --color-accent: var(--color-brand-soft);
+  --color-accent-foreground: var(--color-brand-hover);
+  --color-destructive: var(--color-loss);
+  --color-destructive-foreground: var(--color-bg);
+  --color-input: var(--color-border);
+
+  --font-sans: "Inter", "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Re-mapping core radius utilities so rounded-md uses radius, etc. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+  --radius: var(--radius-md);
+
+  /* Re-mapping core shadow utilities so shadow-md gives card shadow */
+  --shadow-sm: 0 1px 2px rgba(10, 14, 26, 0.04), 0 2px 6px rgba(10, 14, 26, 0.03);
+  --shadow-md: 0 1px 2px rgba(10, 14, 26, 0.04), 0 8px 24px rgba(10, 14, 26, 0.04);
+  --shadow-lg: 0 4px 12px rgba(10, 14, 26, 0.06), 0 24px 48px rgba(10, 14, 26, 0.08);
+  
+  /* Retain exact design names for direct usage */
+  --shadow-soft: var(--shadow-sm);
+  --shadow-card: var(--shadow-md);
+  --shadow-modal: var(--shadow-lg);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-bg text-fg font-sans;
+  }
+  .num {
+    @apply font-mono tabular-nums;
+  }
+}

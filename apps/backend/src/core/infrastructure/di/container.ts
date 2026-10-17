@@ -1,0 +1,505 @@
+import type { ICryptographyPort } from '../../domain/ports/ICryptographyPort.js';
+import type { IVaultCredentialsPort } from '../../domain/ports/IVaultCredentialsPort.js';
+import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+import type { IPriceHistoryPort } from '../../domain/ports/IPriceHistoryPort.js';
+import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider.js';
+import type { IFxRateLedgerPort } from "../../domain/ports/IFxRateLedgerPort.js";
+import type { IExchangeRatePort } from '../../domain/ports/IExchangeRatePort.js';
+import type { ILedgerPort } from '../../domain/ports/ILedgerPort.js';
+import type { IPriceIngestionPort } from '../../domain/ports/IPriceIngestionPort.js';
+import type { IPortfolioAnalyticsPort } from '../../domain/ports/IPortfolioAnalyticsPort.js';
+import type { ITaxCalculatorPort } from '../../domain/ports/ITaxCalculatorPort.js';
+import type { IMetricsPort } from '../../domain/ports/IMetricsPort.js';
+import type { IDatabasePort, IAnalyticalDatabasePort } from '@criptofolio/database';
+import { NodeSqliteAdapter } from '@criptofolio/database';
+import { getLedgerDb, resolveAdvisorDbPath } from '@criptofolio/database';
+import type { DatabaseSync } from 'node:sqlite';
+import { EcbExchangeRateAdapter } from '../adapters/EcbExchangeRateAdapter.js';
+import { AesGcmCryptographyAdapter } from '../adapters/AesGcmCryptographyAdapter.js';
+import { SqliteVaultPortAdapter } from '../adapters/SqliteVaultPortAdapter.js';
+import { InMemoryPriceHistoryAdapter } from '../adapters/InMemoryPriceHistoryAdapter.js';
+import { SQLiteLedgerAdapter } from '../adapters/SQLiteLedgerAdapter.js';
+import { DuckDbParquetPriceAdapter } from '../adapters/DuckDbParquetPriceAdapter.js';
+import { DuckDbPortfolioAnalyticsAdapter } from '../adapters/DuckDbPortfolioAnalyticsAdapter.js';
+import { DuckDbTaxCalculatorAdapter } from '../adapters/DuckDbTaxCalculatorAdapter.js';
+import { DuckDbMetricsAdapter } from '../adapters/DuckDbMetricsAdapter.js';
+import { UnlockVaultUseCase } from '../../application/use-cases/vault/UnlockVaultUseCase.js';
+import { StoreServiceCredentialUseCase } from '../../application/use-cases/vault/StoreServiceCredentialUseCase.js';
+import { GetVaultStatusUseCase } from '../../application/use-cases/vault/GetVaultStatusUseCase.js';
+import { GetAvailableProvidersUseCase } from '../../application/use-cases/vault/GetAvailableProvidersUseCase.js';
+import { ToggleVaultProviderUseCase } from '../../application/use-cases/vault/ToggleVaultProviderUseCase.js';
+import { MarketDataOrchestrator } from '../../application/services/MarketDataOrchestrator.js';
+import { KrakenMarketDataAdapter } from '../adapters/KrakenMarketDataAdapter.js';
+import { CoinGeckoMarketDataAdapter } from '../adapters/CoinGeckoMarketDataAdapter.js';
+import { BinanceMarketDataAdapter } from '../adapters/BinanceMarketDataAdapter.js';
+import { CoinbaseMarketDataAdapter } from '../adapters/CoinbaseMarketDataAdapter.js';
+import { Bit2MeMarketDataAdapter } from '../adapters/Bit2MeMarketDataAdapter.js';
+import { UpdateActiveMarketProviderUseCase } from '../../application/use-cases/UpdateActiveMarketProviderUseCase.js';
+import { CsvIngestionUseCase } from '../../application/use-cases/CsvIngestionUseCase.js';
+import { BackfillExchangeRateGapsUC } from '../../application/use-cases/BackfillExchangeRateGapsUC.js';
+import { DeferredBackfillSchedulerAdapter } from '../adapters/DeferredBackfillSchedulerAdapter.js';
+import type { IBackfillSchedulerPort } from '../../domain/ports/IBackfillSchedulerPort.js';
+import { InitializeLedgerUseCase } from '../../application/use-cases/InitializeLedgerUseCase.js';
+import { KrakenPriceProviderAdapter } from '../adapters/KrakenPriceProviderAdapter.js';
+import { IngestDailyPricesUseCase } from '../../application/use-cases/IngestDailyPricesUseCase.js';
+import { GetPortfolioSummaryUseCase } from '../../application/use-cases/GetPortfolioSummaryUseCase.js';
+import { GetSpanishTaxReportUseCase } from '../../application/use-cases/GetSpanishTaxReportUseCase.js';
+import { GetTokenHistoryUseCase } from '../../application/use-cases/GetTokenHistoryUseCase.js';
+import { GetFiscalIntegrityUseCase } from '../../application/use-cases/GetFiscalIntegrityUseCase.js';
+import { GetKpisUseCase } from '../../application/use-cases/GetKpisUseCase.js';
+import { GetAssetAllocationUseCase } from '../../application/use-cases/GetAssetAllocationUseCase.js';
+import { GetPerformanceHistoryUseCase } from '../../application/use-cases/GetPerformanceHistoryUseCase.js';
+import { GetVolatilityHeatmapUseCase } from '../../application/use-cases/GetVolatilityHeatmapUseCase.js';
+import { GetDrawdownCurveUseCase } from '../../application/use-cases/GetDrawdownCurveUseCase.js';
+import { GetRiskMetricsUseCase } from '../../application/use-cases/GetRiskMetricsUseCase.js';
+import { FifoMaterializerService } from '../../application/services/FifoMaterializerService.js';
+import { FifoChainFreshnessService } from '../../application/services/FifoChainFreshnessService.js';
+import { DuckDbDerivedChainAdapter } from '../adapters/DuckDbDerivedChainAdapter.js';
+import { IngestAndMaterializeUseCase } from '../../application/use-cases/IngestAndMaterializeUseCase.js';
+import { GetDerivativesPnlUseCase } from '../../application/use-cases/GetDerivativesPnlUseCase.js';
+import { GetLotCustodyLocationsUseCase } from '../../application/use-cases/GetLotCustodyLocationsUseCase.js';
+import { GetPortfolioScenarioUseCase } from '../../application/use-cases/GetPortfolioScenarioUseCase.js';
+import { SearchSpotTransactionsUseCase } from '../../application/use-cases/SearchSpotTransactionsUseCase.js';
+import { ListAccountsUseCase } from '../../application/use-cases/accounts/ListAccountsUseCase.js';
+import { SetTransferDestinationUseCase } from '../../application/use-cases/overrides/SetTransferDestinationUseCase.js';
+import { SetSpotTransactionOverrideUseCase } from '../../application/use-cases/overrides/SetSpotTransactionOverrideUseCase.js';
+import { RemoveSpotTransactionOverrideUseCase } from '../../application/use-cases/overrides/RemoveSpotTransactionOverrideUseCase.js';
+import { RemoveTransferDestinationUseCase } from '../../application/use-cases/overrides/RemoveTransferDestinationUseCase.js';
+import type { AskAdvisorUC } from '../../application/use-cases/AskAdvisorUC.js';
+import { composeAskAdvisor, lateBoundToolUseCases, readAdvisorEnv } from './advisorComposition.js';
+
+class UninitializedAnalyticalDatabaseAdapter implements IAnalyticalDatabasePort {
+  async initialize(): Promise<void> {}
+  async queryOne<T = Record<string, unknown>>(): Promise<T | null> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+  async queryMany<T>(): Promise<T[]> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+  async execute(): Promise<void> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+  async bulkInsert(): Promise<void> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+  async rebuildDerivedChain(): Promise<{ buildId: string; builtAt: string }> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+  async describeDerivedChain(): Promise<{ buildId: string; builtAt: string } | null> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+}
+
+/**
+ * DIContainer — Composes the application layer.
+ *
+ * This is the ONLY place that knows about concrete implementations.
+ * The domain and application layers only see Port interfaces.
+ *
+ * To swap the database engine (e.g., to PostgreSQL), replace SqliteVaultPortAdapter
+ * with a new PostgresVaultPortAdapter implementing the same interfaces.
+ */
+export class DIContainer {
+  public readonly sqlitePort: IDatabasePort;
+  public readonly cryptographyPort: ICryptographyPort;
+  public readonly vaultCredentialsPort: IVaultCredentialsPort;
+  public readonly userSettingsPort: IUserSettingsPort;
+  public readonly unlockVaultUseCase: UnlockVaultUseCase;
+  public readonly storeServiceCredentialUseCase: StoreServiceCredentialUseCase;
+  public readonly getVaultStatusUseCase: GetVaultStatusUseCase;
+  public readonly getAvailableProvidersUseCase: GetAvailableProvidersUseCase;
+  public readonly toggleVaultProviderUseCase: ToggleVaultProviderUseCase;
+
+  /** Exchange Rates */
+  public readonly exchangeRatePort: IExchangeRatePort;
+  /** The dated FX ledger the FIFO engine resolves rates from, distinct from the current-rate KV. */
+  public readonly fxRateLedgerPort: IFxRateLedgerPort;
+
+  /** Market data */
+  public readonly priceHistoryPort: IPriceHistoryPort;
+  public readonly marketDataOrchestrator: MarketDataOrchestrator;
+  public readonly krakenMarketDataAdapter: KrakenMarketDataAdapter;
+  public readonly coinGeckoMarketDataAdapter: CoinGeckoMarketDataAdapter;
+  public readonly binanceMarketDataAdapter: BinanceMarketDataAdapter;
+  public readonly coinbaseMarketDataAdapter: CoinbaseMarketDataAdapter;
+  public readonly bit2meMarketDataAdapter: Bit2MeMarketDataAdapter;
+  public readonly marketProviders: Record<string, IMarketDataProvider>;
+  public readonly updateActiveMarketProviderUseCase: UpdateActiveMarketProviderUseCase;
+
+  /** Ledger & Ingestion */
+  public readonly ledgerPort: ILedgerPort;
+  public readonly csvIngestionUseCase: CsvIngestionUseCase;
+  public readonly backfillExchangeRateGapsUC: BackfillExchangeRateGapsUC;
+  public readonly backfillSchedulerPort: IBackfillSchedulerPort;
+  public readonly initializeLedgerUseCase: InitializeLedgerUseCase;
+  public readonly listAccountsUseCase: ListAccountsUseCase;
+  public readonly searchSpotTransactionsUseCase: SearchSpotTransactionsUseCase;
+
+  /** Analytical DuckDB Ports & Adapters */
+  public priceIngestionPort: IPriceIngestionPort;
+  public portfolioAnalyticsPort: IPortfolioAnalyticsPort;
+  public taxCalculatorPort: ITaxCalculatorPort;
+  public metricsPort: IMetricsPort;
+
+  /** Use Cases */
+  public ingestDailyPricesUseCase: IngestDailyPricesUseCase;
+  public getPortfolioSummaryUseCase: GetPortfolioSummaryUseCase;
+  public getSpanishTaxReportUseCase: GetSpanishTaxReportUseCase;
+  public getDerivativesPnlUseCase: GetDerivativesPnlUseCase;
+  public getLotCustodyLocationsUseCase: GetLotCustodyLocationsUseCase;
+  public getPortfolioScenarioUseCase: GetPortfolioScenarioUseCase;
+  public getTokenHistoryUseCase: GetTokenHistoryUseCase;
+  public getFiscalIntegrityUseCase: GetFiscalIntegrityUseCase;
+  public getKpisUseCase: GetKpisUseCase;
+  public getAssetAllocationUseCase: GetAssetAllocationUseCase;
+  public getPerformanceHistoryUseCase: GetPerformanceHistoryUseCase;
+  public getVolatilityHeatmapUseCase: GetVolatilityHeatmapUseCase;
+  public getDrawdownCurveUseCase: GetDrawdownCurveUseCase;
+  public getRiskMetricsUseCase: GetRiskMetricsUseCase;
+  public fifoMaterializerService: FifoMaterializerService;
+  /**
+   * Singleton over the container's lifetime (design D4/D4a): every caller — reads, ingestion,
+   * override mutations, the manual rebuild and the scheduled jobs — goes through this exact
+   * instance, so "one derived-state pipeline in flight per process" holds. Reconstructed once in
+   * `setDuckDbAdapter()` when the real DuckDB connection replaces the startup stub; nothing
+   * else ever creates a second instance.
+   */
+  public fifoChainFreshnessService: FifoChainFreshnessService;
+  public ingestAndMaterializeUseCase: IngestAndMaterializeUseCase;
+  public setTransferDestinationUseCase: SetTransferDestinationUseCase;
+  public removeTransferDestinationUseCase: RemoveTransferDestinationUseCase;
+  public setSpotTransactionOverrideUseCase: SetSpotTransactionOverrideUseCase;
+  public removeSpotTransactionOverrideUseCase: RemoveSpotTransactionOverrideUseCase;
+
+  private readonly ledgerDb: DatabaseSync;
+  private advisorUseCase: AskAdvisorUC | null = null;
+
+  /**
+   * Built on first read, once, because constructing the advisor's memory opens (and creates)
+   * `ai-advisor.db`; a container that never serves an advisor request should not touch that file.
+   * The tools inside it resolve their use cases through this container on every run, so the
+   * analytical rebinding in `setDuckDbAdapter()` is seen without rebuilding anything.
+   */
+  get askAdvisorUC(): AskAdvisorUC {
+    if (!this.advisorUseCase) {
+      this.advisorUseCase = composeAskAdvisor({
+        ledgerDb: this.ledgerDb,
+        advisorDbPath: resolveAdvisorDbPath(),
+        userSettingsPort: this.userSettingsPort,
+        cryptographyPort: this.cryptographyPort,
+        vaultPort: this.vaultCredentialsPort,
+        toolUseCases: lateBoundToolUseCases(this),
+        ...readAdvisorEnv(process.env),
+      });
+    }
+    return this.advisorUseCase;
+  }
+
+  constructor() {
+    this.sqlitePort = new NodeSqliteAdapter();
+    this.cryptographyPort = new AesGcmCryptographyAdapter();
+    const sqliteAdapter = new SqliteVaultPortAdapter(this.sqlitePort);
+    this.vaultCredentialsPort = sqliteAdapter;
+    this.userSettingsPort = sqliteAdapter;
+    this.unlockVaultUseCase = new UnlockVaultUseCase(this.cryptographyPort, this.vaultCredentialsPort);
+    this.storeServiceCredentialUseCase = new StoreServiceCredentialUseCase(this.cryptographyPort, this.vaultCredentialsPort);
+    this.getVaultStatusUseCase = new GetVaultStatusUseCase(this.cryptographyPort, this.vaultCredentialsPort);
+    this.getAvailableProvidersUseCase = new GetAvailableProvidersUseCase();
+    this.toggleVaultProviderUseCase = new ToggleVaultProviderUseCase(this.cryptographyPort, this.vaultCredentialsPort);
+
+    this.exchangeRatePort = new EcbExchangeRateAdapter();
+
+    // Market data — wired lazily; broadcastPrice is injected from the route module
+    // to avoid circular imports. The orchestrator receives the callback on first use.
+    this.priceHistoryPort = new InMemoryPriceHistoryAdapter();
+    this.krakenMarketDataAdapter = new KrakenMarketDataAdapter();
+    this.coinGeckoMarketDataAdapter = new CoinGeckoMarketDataAdapter();
+    this.binanceMarketDataAdapter = new BinanceMarketDataAdapter();
+    this.coinbaseMarketDataAdapter = new CoinbaseMarketDataAdapter();
+    this.bit2meMarketDataAdapter = new Bit2MeMarketDataAdapter();
+    
+    this.marketProviders = {
+      [this.krakenMarketDataAdapter.id]: this.krakenMarketDataAdapter,
+      [this.coinGeckoMarketDataAdapter.id]: this.coinGeckoMarketDataAdapter,
+      [this.binanceMarketDataAdapter.id]: this.binanceMarketDataAdapter,
+      [this.coinbaseMarketDataAdapter.id]: this.coinbaseMarketDataAdapter,
+      [this.bit2meMarketDataAdapter.id]: this.bit2meMarketDataAdapter,
+    };
+    
+    // Broadcast callback will be set via setOrchestrator() after route initialisation
+    this.marketDataOrchestrator = new MarketDataOrchestrator((_price) => {
+      // Default no-op; overridden at startup by index.ts after routes are mounted
+    });
+
+    this.updateActiveMarketProviderUseCase = new UpdateActiveMarketProviderUseCase(
+      this.userSettingsPort,
+      this.marketDataOrchestrator,
+      this.marketProviders
+    );
+
+    // Ledger DB — separate SQLite instance for the financial ledger
+    // No path argument: `LEDGER_DB_PATH` is read where every other database path is read, so a
+    // relative value cannot be anchored to the cwd here and to the data root there.
+    this.ledgerDb = getLedgerDb();
+    const ledgerAdapter = new SQLiteLedgerAdapter(this.ledgerDb);
+    this.ledgerPort = ledgerAdapter;
+    this.fxRateLedgerPort = ledgerAdapter;
+
+    // CSV Ingestion — uses Kraken as the historical price provider
+    const priceProvider = new KrakenPriceProviderAdapter(this.krakenMarketDataAdapter);
+    this.backfillExchangeRateGapsUC = new BackfillExchangeRateGapsUC(
+      this.exchangeRatePort,
+      this.fxRateLedgerPort,
+    );
+    // The freshness service is rebound when the analytical database initialises, so it is
+    // reached through the container rather than captured: a captured reference would rebuild the
+    // uninitialised guard forever.
+    this.backfillSchedulerPort = new DeferredBackfillSchedulerAdapter(
+      this.backfillExchangeRateGapsUC,
+      { refresh: () => this.fifoChainFreshnessService.refresh() },
+    );
+    this.csvIngestionUseCase = new CsvIngestionUseCase(
+      this.ledgerPort,
+      priceProvider,
+      this.userSettingsPort,
+      this.backfillSchedulerPort,
+    );
+    this.initializeLedgerUseCase = new InitializeLedgerUseCase(this.ledgerPort, this.userSettingsPort);
+    this.listAccountsUseCase = new ListAccountsUseCase(this.ledgerPort);
+    this.searchSpotTransactionsUseCase = new SearchSpotTransactionsUseCase(this.ledgerPort);
+
+    // Analytical DuckDB Adapters (initially bound to uninitialized guard)
+    const uninitializedDb = new UninitializedAnalyticalDatabaseAdapter();
+    this.priceIngestionPort = new DuckDbParquetPriceAdapter(uninitializedDb);
+    this.portfolioAnalyticsPort = new DuckDbPortfolioAnalyticsAdapter(uninitializedDb);
+    this.taxCalculatorPort = new DuckDbTaxCalculatorAdapter(uninitializedDb);
+    this.metricsPort = new DuckDbMetricsAdapter(uninitializedDb);
+    this.fifoMaterializerService = new FifoMaterializerService(this.ledgerPort, this.taxCalculatorPort);
+    this.fifoChainFreshnessService = new FifoChainFreshnessService(
+      this.userSettingsPort,
+      new DuckDbDerivedChainAdapter(uninitializedDb),
+      this.fifoMaterializerService,
+    );
+
+    this.ingestDailyPricesUseCase = new IngestDailyPricesUseCase(
+      this.ledgerPort,
+      this.priceIngestionPort,
+      this.krakenMarketDataAdapter,
+    );
+
+    this.getPortfolioSummaryUseCase = new GetPortfolioSummaryUseCase(
+      this.portfolioAnalyticsPort,
+      this.fifoChainFreshnessService,
+      this.userSettingsPort,
+      this.metricsPort,
+    );
+
+    this.getLotCustodyLocationsUseCase = new GetLotCustodyLocationsUseCase(
+      this.taxCalculatorPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getDerivativesPnlUseCase = new GetDerivativesPnlUseCase(
+      this.portfolioAnalyticsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getPortfolioScenarioUseCase = new GetPortfolioScenarioUseCase(this.getPortfolioSummaryUseCase);
+
+    this.getSpanishTaxReportUseCase = new GetSpanishTaxReportUseCase(
+      this.taxCalculatorPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getTokenHistoryUseCase = new GetTokenHistoryUseCase(
+      this.taxCalculatorPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getFiscalIntegrityUseCase = new GetFiscalIntegrityUseCase(
+      this.taxCalculatorPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getKpisUseCase = new GetKpisUseCase(this.metricsPort, this.fifoChainFreshnessService);
+    this.getAssetAllocationUseCase = new GetAssetAllocationUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getPerformanceHistoryUseCase = new GetPerformanceHistoryUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getVolatilityHeatmapUseCase = new GetVolatilityHeatmapUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getDrawdownCurveUseCase = new GetDrawdownCurveUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getRiskMetricsUseCase = new GetRiskMetricsUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.ingestAndMaterializeUseCase = new IngestAndMaterializeUseCase(
+      this.csvIngestionUseCase,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.setTransferDestinationUseCase = new SetTransferDestinationUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.removeTransferDestinationUseCase = new RemoveTransferDestinationUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.setSpotTransactionOverrideUseCase = new SetSpotTransactionOverrideUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+      this.taxCalculatorPort,
+    );
+    this.removeSpotTransactionOverrideUseCase = new RemoveSpotTransactionOverrideUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+  }
+
+  /**
+   * Injects the initialized DuckDbAdapter into the analytical DuckDB adapters and use cases.
+   * Must be called AFTER duckDb.initialize() in index.ts.
+   */
+  setDuckDbAdapter(duckDb: IAnalyticalDatabasePort): void {
+    this.priceIngestionPort = new DuckDbParquetPriceAdapter(duckDb);
+    this.portfolioAnalyticsPort = new DuckDbPortfolioAnalyticsAdapter(duckDb);
+    this.taxCalculatorPort = new DuckDbTaxCalculatorAdapter(duckDb);
+    this.metricsPort = new DuckDbMetricsAdapter(duckDb);
+    this.fifoMaterializerService = new FifoMaterializerService(this.ledgerPort, this.taxCalculatorPort);
+    this.fifoChainFreshnessService = new FifoChainFreshnessService(
+      this.userSettingsPort,
+      new DuckDbDerivedChainAdapter(duckDb),
+      this.fifoMaterializerService,
+    );
+
+    this.ingestDailyPricesUseCase = new IngestDailyPricesUseCase(
+      this.ledgerPort,
+      this.priceIngestionPort,
+      this.krakenMarketDataAdapter,
+    );
+
+    this.getPortfolioSummaryUseCase = new GetPortfolioSummaryUseCase(
+      this.portfolioAnalyticsPort,
+      this.fifoChainFreshnessService,
+      this.userSettingsPort,
+      this.metricsPort,
+    );
+
+    this.getLotCustodyLocationsUseCase = new GetLotCustodyLocationsUseCase(
+      this.taxCalculatorPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getDerivativesPnlUseCase = new GetDerivativesPnlUseCase(
+      this.portfolioAnalyticsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getPortfolioScenarioUseCase = new GetPortfolioScenarioUseCase(this.getPortfolioSummaryUseCase);
+
+    this.getSpanishTaxReportUseCase = new GetSpanishTaxReportUseCase(
+      this.taxCalculatorPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getTokenHistoryUseCase = new GetTokenHistoryUseCase(
+      this.taxCalculatorPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getFiscalIntegrityUseCase = new GetFiscalIntegrityUseCase(
+      this.taxCalculatorPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getKpisUseCase = new GetKpisUseCase(this.metricsPort, this.fifoChainFreshnessService);
+    this.getAssetAllocationUseCase = new GetAssetAllocationUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getPerformanceHistoryUseCase = new GetPerformanceHistoryUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getVolatilityHeatmapUseCase = new GetVolatilityHeatmapUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getDrawdownCurveUseCase = new GetDrawdownCurveUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getRiskMetricsUseCase = new GetRiskMetricsUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.ingestAndMaterializeUseCase = new IngestAndMaterializeUseCase(
+      this.csvIngestionUseCase,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.setTransferDestinationUseCase = new SetTransferDestinationUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.removeTransferDestinationUseCase = new RemoveTransferDestinationUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.setSpotTransactionOverrideUseCase = new SetSpotTransactionOverrideUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+      this.taxCalculatorPort,
+    );
+    this.removeSpotTransactionOverrideUseCase = new RemoveSpotTransactionOverrideUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+  }
+}
+
+let _container: DIContainer | null = null;
+export const getContainer = (): DIContainer => {
+  if (!_container) {
+    _container = new DIContainer();
+  }
+  return _container;
+};
+
+export const container = new Proxy({} as DIContainer, {
+  get: (_, prop) => {
+    const inst = getContainer();
+    const value = Reflect.get(inst, prop);
+    return typeof value === 'function' ? value.bind(inst) : value;
+  },
+});

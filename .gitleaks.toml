@@ -1,0 +1,107 @@
+title = "Criptofolio leak guardrail"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Lockfile integrity hashes"
+paths = ['''pnpm-lock\.yaml$''']
+
+[[rules]]
+id = "xrp-classic-address"
+description = "XRP classic address without the project's synthetic marker"
+regex = '''\br[1-9A-HJ-NP-Za-km-z]{24,34}\b'''
+entropy = 3.8
+
+  [[rules.allowlists]]
+  regexTarget = "match"
+  regexes = ['''^rSYNTH''']
+
+[[rules]]
+id = "stellar-address"
+description = "Stellar address without the project's synthetic marker"
+regex = '''\bG[A-Z2-7]{55}\b'''
+
+  [[rules.allowlists]]
+  regexTarget = "match"
+  regexes = ['''^GSYNTH''']
+
+[[rules]]
+id = "evm-address"
+description = "EVM address without the project's synthetic marker"
+regex = '''\b0x[0-9a-fA-F]{40}\b'''
+
+  [[rules.allowlists]]
+  regexTarget = "match"
+  regexes = ['''^0x(?i:fa4ef1c7)''']
+
+[[rules]]
+id = "evm-tx-hash"
+description = "EVM transaction hash without the project's synthetic marker"
+regex = '''\b0x[0-9a-fA-F]{64}\b'''
+
+  [[rules.allowlists]]
+  regexTarget = "match"
+  regexes = ['''^0x(?i:fa4ef1c7)''']
+
+[[rules]]
+id = "hex64-tx-hash"
+description = "Bare 64-hex transaction hash without the project's synthetic marker"
+regex = '''\b[0-9a-fA-F]{64}\b'''
+
+  [[rules.allowlists]]
+  regexTarget = "match"
+  regexes = ['''^(?i:fa4ef1c7)''']
+
+  [[rules.allowlists]]
+  description = "Pinned gitleaks release checksum in the CI workflow"
+  condition = "AND"
+  regexTarget = "match"
+  paths = ['''\.github/workflows/ci\.yml$''']
+  regexes = ['''^551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb$''']
+
+[[rules]]
+id = "cardano-payment-address"
+description = "Cardano payment address without the project's synthetic marker"
+regex = '''\baddr1[02-9ac-hj-np-z]{50,}\b'''
+
+  [[rules.allowlists]]
+  regexTarget = "match"
+  regexes = ['''^addr1synth''']
+
+[[rules]]
+id = "cardano-stake-address"
+description = "Cardano stake address without the project's synthetic marker"
+regex = '''\bstake1[02-9ac-hj-np-z]{50,}\b'''
+
+  [[rules.allowlists]]
+  regexTarget = "match"
+  regexes = ['''^stake1synth''']
+
+[[rules]]
+id = "hedera-account"
+description = "Hedera account without the project's synthetic marker"
+regex = '''\b0\.0\.[1-9][0-9]{3,9}\b'''
+
+  [[rules.allowlists]]
+  regexTarget = "match"
+  regexes = ['''^0\.0\.99''']
+
+[[rules]]
+id = "solana-address"
+description = "Solana address without the project's synthetic marker"
+regex = '''\b[1-9A-HJ-NP-Za-km-z]{32,44}\b'''
+entropy = 4.3
+
+  [[rules.allowlists]]
+  regexTarget = "match"
+  regexes = ['''^SYNTH''', '''^rSYNTH''']
+
+[[rules]]
+id = "solana-signature"
+description = "Solana transaction signature without the project's synthetic marker"
+regex = '''\b[1-9A-HJ-NP-Za-km-z]{86,88}\b'''
+
+  [[rules.allowlists]]
+  regexTarget = "match"
+  regexes = ['''^SYNTH''']
